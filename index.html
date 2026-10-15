@@ -83,7 +83,7 @@ details.how summary{cursor:pointer;color:var(--muted);font-size:13px}
 </head>
 <body>
 <main>
-  <div class="brand"><svg width="40" height="12" viewBox="0 0 40 12" aria-hidden="true"><g fill="var(--hit)"><circle cx="5" cy="6" r="4.5"/><circle cx="15" cy="6" r="4.5"/><circle cx="25" cy="6" r="4.5"/></g><g fill="none" stroke="var(--miss)" stroke-width="1.6"><circle cx="35" cy="6" r="3.7"/></g></svg><h1>Разбор гонки</h1></div>
+  <div class="brand"><svg width="50" height="12" viewBox="0 0 50 12" aria-hidden="true"><g fill="var(--hit)"><circle cx="5" cy="6" r="4.5"/><circle cx="15" cy="6" r="4.5"/><circle cx="25" cy="6" r="4.5"/><circle cx="35" cy="6" r="4.5"/></g><g fill="none" stroke="var(--miss)" stroke-width="1.6"><circle cx="45" cy="6" r="3.7"/></g></svg><h1>Разбор гонки</h1></div>
   <p class="sub">Pioner Cup · место в категории, стрельба лёжа и стоя, цена промаха — по официальным протоколам.</p>
 
   <section class="card">
@@ -161,15 +161,26 @@ async function search(q){
   return hits;
 }
 
+const PROFILES={};
 async function loadProfiles(hits){
   let done=0;
-  const res=await pool(hits,6,async h=>{const r=await post('/results/individual/profile',{participantId:h.participantId,raceId:h.raceId,language:'ru'});done++;el('status').textContent=`Загружаю гонки: ${done} из ${hits.length}…`;const x=r&&r.result&&r.result.results&&r.result.results[0];if(!x)return null;return parseRace(h,x,r);});
+  const res=await pool(hits,6,async h=>{if(h.participantId in PROFILES){done++;return PROFILES[h.participantId];}const r=await post('/results/individual/profile',{participantId:h.participantId,raceId:h.raceId,language:'ru'});done++;el('status').textContent=`Загружаю гонки: ${done} из ${hits.length}…`;const x=r&&r.result&&r.result.results&&r.result.results[0];return PROFILES[h.participantId]=x?parseRace(h,x,r):null;});
   return res.filter(x=>x&&!x.error);
+}
+
+// Stages of one result. Before 2026 the protocol has no firing lines but lists the penalty loops:
+// lap, range, lap, range, lap, and the loops sit in the range segment or in the lap after it. One loop is one miss as a rule.
+const loopsIn=s=>(s.stageResults||[]).filter(c=>c.isFine).length;
+function splitStages(st,force){
+  const out=st.map(s=>({fire:s.firingLine?{misses:s.firingLine.missesNumber,prone:s.firingLine.type===2}:null,time:s.individualResult,pos:s.position}));
+  if(st.some(s=>s.firingLine)||st.length<3||st.length%2===0||!(force||st.some(x=>loopsIn(x))))return out;
+  out.forEach((x,i)=>{if(i%2===1)x.fire={misses:Math.min(5,loopsIn(st[i])+loopsIn(st[i+1])),prone:(i-1)/2%2===0,est:true};});
+  return out;
 }
 
 function parseRace(h,x,r){
   const {cat,type}=raceKind(h.raceName);
-  const stages=(x.stageResults||[]).map(s=>({fire:s.firingLine?{misses:s.firingLine.missesNumber,prone:s.firingLine.type===2}:null,time:secs(s.individualResult),pos:s.position}));
+  const stages=splitStages(x.stageResults||[]).map(s=>({...s,time:secs(s.time)}));
   const laps=stages.filter(s=>!s.fire),ranges=stages.filter(s=>s.fire),order=stages;
   const total=r.participantCount||null;
   return {
@@ -177,7 +188,7 @@ function parseRace(h,x,r){
     raceName:h.raceName,cat,type,name:h.fullName,
     result:secs(x.individualResult),resultText:x.individualResult||'',ok:x.status===0&&(!!x.individualResult||x.position>0),
     pos:x.position,of:total,catName:x.genderAgeNominationName,catPos:x.individualGenderAgePosition>0?x.individualGenderAgePosition:null,catOf:r.categoryParticipantCount||null,
-    laps,ranges,order,hasFire:ranges.length>0
+    laps,ranges,order,hasFire:ranges.length>0,est:ranges.some(f=>f.fire.est)
   };
 }
 
@@ -187,16 +198,17 @@ function fieldTimes(race){
   if(!FIELD[race.raceId])FIELD[race.raceId]=(async()=>{
     const rows=[];
     for(let skip=0;skip<1000;skip+=100){const r=await post('/results/individual/get',{eventId:race.eventId,raceId:race.raceId,page:{skip,take:100},filter:{},isStagesOn:true,language:'ru'});const part=(r.result&&r.result.results)||r.results||[];rows.push(...part);if(part.length<100)break;}
-    return rows.filter(x=>x.status===0&&secs(x.individualResult)!=null).map(x=>{const st=x.stageResults||[],f=st.filter(s=>s.firingLine);
-      return {id:x.participantId,t:secs(x.individualResult),cat:x.genderAgeNominationName,
-        pm:f.filter(s=>s.firingLine.type===2).map(s=>s.firingLine.missesNumber),sm:f.filter(s=>s.firingLine.type!==2).map(s=>s.firingLine.missesNumber),
-        laps:st.filter(s=>!s.firingLine).map(s=>secs(s.individualResult)),rt:f.map(s=>secs(s.individualResult)).filter(Boolean)};});
+    const loops=rows.some(x=>(x.stageResults||[]).some(s=>loopsIn(s)));
+    return rows.filter(x=>x.status===0&&secs(x.individualResult)!=null).map(x=>{const st=splitStages(x.stageResults||[],loops),f=st.filter(s=>s.fire);
+      return {id:x.participantId,t:secs(x.individualResult),cat:x.genderAgeNominationName,est:f.some(s=>s.fire.est),
+        pm:f.filter(s=>s.fire.prone).map(s=>s.fire.misses),sm:f.filter(s=>!s.fire.prone).map(s=>s.fire.misses),
+        laps:st.filter(s=>!s.fire).map(s=>secs(s.time)),rt:f.filter(s=>!s.fire.est).map(s=>secs(s.time)).filter(Boolean)};});
   })().catch(e=>{delete FIELD[race.raceId];throw e;});
   return FIELD[race.raceId];
 }
 // The cost of a miss in one race: median over everyone with at least two misses (extra lap time per miss).
 function fieldCost(field){
-  const c=[];for(const x of field){const m=x.pm.concat(x.sm).reduce((a,b)=>a+b,0);if(m<2||x.laps.length<2||!x.laps[0])continue;
+  const c=[];for(const x of field){const m=x.pm.concat(x.sm).reduce((a,b)=>a+b,0);if(x.est||m<2||x.laps.length<2||!x.laps[0])continue;
     const v=x.laps.slice(1).reduce((n,l)=>n+(l?l-x.laps[0]:0),0)/m;if(v>=10&&v<=60)c.push(v);}
   return c.length>=10?Math.round(median(c)):null;
 }
@@ -222,7 +234,7 @@ async function paceCompare(races){
     const vc=vsCategory(r,await fieldTimes(r));if(!vc)continue;if(vc.lapD!=null)lapD.push(vc.lapD);if(vc.rngD!=null)rngD.push(vc.rngD);}
   if(lapD.length<2)return null;
   const L=Math.round(median(lapD)),R=rngD.length>=2?Math.round(median(rngD)):null;
-  const body=`Первый круг — ${paceWord(L)} категории${R!=null?`, рубежи — ${paceWord(R)}`:''}. ${lapD.length} ${plural(lapD.length,'гонка','гонки','гонок')}.`;
+  const body=`Первый круг — ${paceWord(L)} типичного участника вашей категории${R!=null?`, рубежи — ${paceWord(R)}`:''}. По ${lapD.length} ${plural(lapD.length,'гонке','гонкам','гонкам')}.`;
   const rangeFirst=R!=null&&Math.abs(R)>Math.abs(L),d=rangeFirst?R:L;
   const heads=rangeFirst
     ?(d>=3?['На рубеже вы быстрее своей категории.','Время на рубеже — ваше преимущество перед категорией.','На рубеже вы опережаете соперников своего возраста.']
@@ -244,7 +256,7 @@ async function categoryCompare(races){
       for(const m of x.pm){peers.p[0]+=5-m;peers.p[1]+=5;}for(const m of x.sm){peers.s[0]+=5-m;peers.s[1]+=5;}}}
   if(n<10||!me.p[1]||!me.s[1]||!peers.p[1]||!peers.s[1])return null;
   const a=pct(...me.p),b=pct(...me.s),ca=pct(...peers.p),cb=pct(...peers.s),gap=Math.max(Math.abs(a-ca),Math.abs(b-cb));
-  const body=`Лёжа ${a}% (категория ${ca}%), стоя ${b}% (${cb}%). Те же гонки, ${n} соперников.`;
+  let body=`Лёжа: у вас ${a}%, в среднем по категории ${ca}%. Стоя: ${b}% и ${cb}%.`;
   const worse=a<ca-5&&b<cb-5,better=a>ca+5&&b>cb+5,dp=a-ca,ds=b-cb;
   let heads;
   if(worse)heads=['Вы стреляете хуже своей категории.','Точность ниже, чем у соперников вашего возраста.','Соперники вашей категории попадают чаще.'];
@@ -252,6 +264,7 @@ async function categoryCompare(races){
   else if(gap>=10){
     // one position differs clearly: name it in the headline
     const [pos,mine,theirs,d]=Math.abs(ds)>=Math.abs(dp)?['Стоя',b,cb,ds]:['Лёжа',a,ca,dp];
+    body=pos==='Стоя'?`Лёжа: у вас ${a}%, в среднем по категории ${ca}%.`:`Стоя: у вас ${b}%, в среднем по категории ${cb}%.`;
     heads=d<0?[`${pos} вы попадаете реже своей категории: ${mine}% против ${theirs}%.`,`${pos} — ниже категории: ${mine}% против ${theirs}%.`,`${pos} категория стреляет точнее: ${theirs}% против ваших ${mine}%.`]
              :[`${pos} вы попадаете чаще своей категории: ${mine}% против ${theirs}%.`,`${pos} — выше категории: ${mine}% против ${theirs}%.`,`${pos} вы точнее категории: ${mine}% против ${theirs}%.`];
   }
@@ -262,7 +275,7 @@ async function categoryCompare(races){
 // --- analysis ---
 function shootingStats(races){
   const s={prone:{shots:0,miss:0},stand:{shots:0,miss:0},rangeRanks:[],races:0};
-  for(const r of races){if(!r.hasFire)continue;s.races++;for(const f of r.ranges){const k=f.fire.prone?'prone':'stand';s[k].shots+=5;s[k].miss+=f.fire.misses;if(f.pos&&r.of)s.rangeRanks.push(f.pos/r.of);}}
+  for(const r of races){if(!r.hasFire)continue;s.races++;for(const f of r.ranges){const k=f.fire.prone?'prone':'stand';s[k].shots+=5;s[k].miss+=f.fire.misses;if(f.pos&&r.of&&!f.fire.est)s.rangeRanks.push(f.pos/r.of);}}
   s.proneAcc=s.prone.shots?pct(s.prone.shots-s.prone.miss,s.prone.shots):null;
   s.standAcc=s.stand.shots?pct(s.stand.shots-s.stand.miss,s.stand.shots):null;
   const all=s.prone.shots+s.stand.shots;s.acc=all?pct(all-s.prone.miss-s.stand.miss,all):null;
@@ -272,7 +285,7 @@ function shootingStats(races){
 function missCost(races){
   const costs=[];
   for(const r of races){
-    if(!r.hasFire||r.type==='Индивидуальная'||r.laps.length<2)continue;
+    if(!r.hasFire||r.est||r.type==='Индивидуальная'||r.laps.length<2)continue;
     const misses=r.ranges.reduce((n,f)=>n+f.fire.misses,0);if(misses<3)continue;
     const l1=r.laps[0].time;if(!l1)continue;
     const extra=r.laps.slice(1).reduce((n,l)=>n+(l.time?l.time-l1:0),0);
@@ -302,15 +315,15 @@ function comments(races,lastWhatIf,catCmp,paceCmp){
     const rs=fireRaces.filter(r=>r.cat===cat);const s=shootingStats(rs);
     const label=cats.length>1?` (${cat})`:'';
     if(s.acc!=null&&s.rangePct!=null){
-      const advice='10–15 секунд на изготовку, скорее всего, окупятся.',fb=`Скорость стрельбы — первые ${s.rangePct}% поля, попаданий ${s.acc}%. ${advice}`;
+      const advice='10–15 секунд на изготовку, скорее всего, окупятся.',fb=`По скорости стрельбы — в первых ${s.rangePct}% участников, попаданий ${s.acc}%. ${advice}`;
       if(s.rangePct<=20&&s.acc<60)out.push(V(3,'fast'+cat,[
         [`Вы стреляете быстрее почти всех — и много мимо${label}.`,fb],
         [`Скорость на рубеже есть, точности не хватает${label}.`,fb],
         [`На рубеже вы торопитесь${label}.`,fb]]));
       else if(s.rangePct>=60&&s.acc>=70)out.push(V(2,'slow'+cat,[
-        [`Стреляете точно, но не спеша${label}.`,`${s.acc}% попаданий, скорость стрельбы — вторая половина поля.`],
-        [`Точность есть — можно добавить скорость${label}.`,`${s.acc}% попаданий, скорость стрельбы — вторая половина поля.`],
-        [`Мишени закрываете, но на рубеже задерживаетесь${label}.`,`${s.acc}% попаданий, скорость стрельбы — вторая половина поля.`]]));
+        [`Стреляете точно, но не спеша${label}.`,`${s.acc}% попаданий, по скорости стрельбы — во второй половине участников.`],
+        [`Точность есть — можно добавить скорость${label}.`,`${s.acc}% попаданий, по скорости стрельбы — во второй половине участников.`],
+        [`Мишени закрываете, но на рубеже задерживаетесь${label}.`,`${s.acc}% попаданий, по скорости стрельбы — во второй половине участников.`]]));
     }
     if(s.proneAcc!=null&&s.standAcc!=null&&s.prone.shots>=10&&s.stand.shots>=10){
       const d=s.proneAcc-s.standAcc,nums=`Лёжа ${s.proneAcc}% (${s.prone.shots-s.prone.miss}/${s.prone.shots}), стоя ${s.standAcc}% (${s.stand.shots-s.stand.miss}/${s.stand.shots}).`;
@@ -329,9 +342,9 @@ function comments(races,lastWhatIf,catCmp,paceCmp){
   const withLap=fireRaces.filter(r=>r.laps[0]&&r.laps[0].pos&&r.of);
   if(withLap.length>=2){
     const lapPct=Math.round(100*median(withLap.map(r=>r.laps[0].pos/r.of))),finPct=Math.round(100*median(withLap.map(r=>r.pos/r.of)));
-    const body=`До первой стрельбы — первые ${lapPct}% поля, на финише — ${finPct}%.`;
+    const body=`До первой стрельбы — в первых ${lapPct}% участников, на финише — в первых ${finPct}%.`;
     if(lapPct<=25&&finPct-lapPct>=15)out.push(V(3,'ski',[['Лыжня — ваша сила, места уходят на рубежах.',body],['Ход сильный — результат теряется на стрельбе.',body],['До первой стрельбы вы высоко, дальше — ниже.',body]]));
-    else if(lapPct>=50&&finPct<lapPct-10){const b2=`До первой стрельбы — ${lapPct}% поля, на финише — первые ${finPct}%.`;
+    else if(lapPct>=50&&finPct<lapPct-10){const b2=`До первой стрельбы — в первых ${lapPct}% участников, на финише — в первых ${finPct}%.`;
       out.push(V(2,'skiweak',[['Стрельба вытягивает, резерв — на лыжне.',b2],['Стрельба поднимает вас вверх протокола.',b2],['Резерв — на лыжне: стрельба уже работает.',b2]]));}
   }
   const cost=missCost(fireRaces);
@@ -377,29 +390,30 @@ const placeText=r=>r.ok?`${r.pos} из ${r.of??'—'}${r.catPos?`, в катег
 const sumMisses=a=>a.reduce((n,f)=>n+f.fire.misses,0);
 const level=(pos,of)=>!pos||!of?'m':pos/of<=.25?'g':pos/of<=.6?'m':'w';
 function splitFinding(t){const d=document.createElement('div');d.innerHTML=t;const head=d.querySelector('.k')?.textContent||'';return {head,body:d.textContent.slice(head.length).trim()};}
+const EST_NOTE='Промахов в протоколе этого этапа нет — они посчитаны по штрафным кругам: обычно кругов столько же, сколько промахов, изредка бывают расхождения. Позиция — по порядку рубежей: первый лёжа, второй стоя.';
 const METRIKA_NOTE='Приложение собирает обезличенную статистику посещений через Яндекс Метрику; фамилии и результаты в неё не передаются.';
-const METHOD='Места на отрезках — среди всех участников гонки. Цена промаха в гонке — медиана по всем её участникам с двумя и более промахами: на сколько круги после рубежей дольше первого в расчёте на один промах; в неё попадает и усталость. Сравнение с категорией — по участникам вашей возрастной группы в тех же гонках, по медиане; ход — по первому кругу, где ещё нет штрафных; время рубежа — без штрафных кругов. Источник — протоколы results.pionercup.ru.';
+const METHOD='Места на отрезках — среди всех участников гонки. Цена промаха в гонке — медиана по всем её участникам с двумя и более промахами: на сколько круги после рубежей дольше первого в расчёте на один промах; в неё попадает и усталость. Сравнение с категорией — по участникам вашей возрастной группы в тех же гонках; «типичный участник» — середина категории: половина быстрее, половина медленнее; ход — по первому кругу, где ещё нет штрафных; время рубежа — без штрафных кругов. Источник — протоколы results.pionercup.ru.';
 
 function overallView(name,races,cms){
-  const fireRaces=races.filter(r=>r.hasFire&&r.ok),s=shootingStats(fireRaces);
-  const best=races.filter(r=>r.catPos).sort((a,b)=>a.catPos/(a.catOf||1)-b.catPos/(b.catOf||1))[0];
+  const fireRaces=races.filter(r=>r.hasFire&&r.ok),s=shootingStats(fireRaces),estN=fireRaces.filter(r=>r.est).length;
+  const best=races.filter(r=>r.catPos).sort((a,b)=>a.catPos-b.catPos||(b.catOf||0)-(a.catOf||0))[0];
   const tiles=[];
   if(s.proneAcc!=null)tiles.push([s.proneAcc+'%','попаданий лёжа']);
   if(s.standAcc!=null)tiles.push([s.standAcc+'%','попаданий стоя']);
   if(s.rangePct!=null)tiles.push(['топ '+s.rangePct+'%','скорость на рубеже']);
-  if(best)tiles.push([`${best.catPos}/${best.catOf??'—'}`,'лучшее в категории']);
+  if(best)tiles.push([`${best.catPos}/${best.catOf??'—'}`,'лучшее место в категории']);
   const shoot=[];
   if(s.prone.shots)shoot.push({label:'Лёжа',hits:s.prone.shots-s.prone.miss,shots:s.prone.shots});
   if(s.stand.shots)shoot.push({label:'Стоя',hits:s.stand.shots-s.stand.miss,shots:s.stand.shots});
-  const lines=[...races].sort(byDateDesc).map(r=>`${dateRu(r.date)} ${r.type} (${r.cat}): ${placeText(r)}${r.hasFire?' · промахи '+r.ranges.map(f=>f.fire.misses).join('-'):''}`);
+  const lines=[...races].sort(byDateDesc).map(r=>`${dateRu(r.date)} ${r.type} (${r.cat}): ${placeText(r)}${r.hasFire?(r.est?' · штрафные круги ':' · промахи ')+r.ranges.map(f=>f.fire.misses).join('-'):''}`);
   const seasons=new Set(races.map(r=>{const d=new Date(r.date);return d.getMonth()>=6?d.getFullYear():d.getFullYear()-1;})).size;
-  return {eyebrow:'Все гонки',title:name,sub:`${races.length} ${plural(races.length,'гонка','гонки','гонок')} · ${seasons} ${plural(seasons,'сезон','сезона','сезонов')} · стрельба записана в ${fireRaces.length}`,
-    tiles,shoot,findings:cms,lines,file:'vse_gonki',notes:[METHOD,...(METRIKA_ID?[METRIKA_NOTE]:[]),'Стрельба по рубежам записана в протоколах с января 2026 года; в более ранних гонках видны только время и места.'],
+  return {eyebrow:'Все гонки',title:name,sub:`${races.length} ${plural(races.length,'гонка','гонки','гонок')} · ${seasons} ${plural(seasons,'сезон','сезона','сезонов')} · стрельба есть в ${fireRaces.length}${estN?` (${estN} — по штрафным кругам)`:''}`,
+    tiles,shoot,findings:cms,lines,file:'vse_gonki',notes:[METHOD,...(METRIKA_ID?[METRIKA_NOTE]:[]),estN?'До 2026 года промахов в протоколах нет — в этих гонках они посчитаны по штрафным кругам: обычно кругов столько же, сколько промахов, изредка бывают расхождения. Позиция — по порядку рубежей: первый лёжа, второй стоя.':'Стрельба по рубежам записана в протоколах с января 2026 года.'],
     empty:'Для выводов о стрельбе мало гонок с записанными промахами.'};
 }
 
 function raceCost(r){
-  if(!r.hasFire||r.type==='Индивидуальная'||r.laps.length<2)return null;
+  if(!r.hasFire||r.est||r.type==='Индивидуальная'||r.laps.length<2)return null;
   const m=sumMisses(r.ranges),l1=r.laps[0].time;if(m<2||!l1)return null;
   const c=r.laps.slice(1).reduce((n,l)=>n+(l.time?l.time-l1:0),0)/m;
   return c>=10&&c<=60?Math.round(c):null;
@@ -409,32 +423,32 @@ async function raceView(name,race,allRaces){
   const out=[];const k=(w,head,body)=>out.push(F(w,head,body));
   const prone=race.ranges.filter(f=>f.fire.prone),stand=race.ranges.filter(f=>!f.fire.prone);
   const misses=sumMisses(race.ranges),shots=race.ranges.length*5,hits=shots-misses;
-  const rangePct=race.ranges.length&&race.of?Math.round(100*median(race.ranges.map(f=>f.pos/race.of))):null;
+  const rangePct=race.ranges.length&&race.of&&!race.est?Math.round(100*median(race.ranges.map(f=>f.pos/race.of))):null;
   const lapPct=race.laps.filter(l=>l.pos&&race.of).map(l=>Math.round(100*l.pos/race.of));
   const finPct=race.ok&&race.of&&race.pos?Math.round(100*race.pos/race.of):null;
-  const notes=[METHOD];
+  const notes=[METHOD];if(race.est)notes.push(EST_NOTE);
   const tiles=[];
   if(race.ok)tiles.push([`${race.pos}/${race.of??'—'}`,'место в гонке']);
   if(race.catPos)tiles.push([`${race.catPos}/${race.catOf??'—'}`,'в категории '+(race.catName||'').replace(/ /g,' ')]);
-  if(race.hasFire)tiles.push([`${hits}/${shots}`,'попаданий']);
+  if(race.hasFire)tiles.push([`${hits}/${shots}`,race.est?'попаданий, по штрафным кругам':'попаданий']);
   if(rangePct!=null)tiles.push(['топ '+rangePct+'%','скорость на рубеже']);
 
   VOICE=name+'|'+race.raceId;
   const v=(w,key,variants)=>out.push(V(w,key,variants));
   if(race.hasFire){
     if(misses===0)v(3,'clean',[['Ни одного промаха.','Результат решала лыжня.'],['Чистая стрельба — все мишени закрыты.','Результат решала лыжня.'],['Стрельба без промахов.','Всё остальное решила лыжня.']]);
-    else if(rangePct!=null&&rangePct<=20&&misses>=race.ranges.length*2){const body=`Скорость стрельбы — первые ${rangePct}% поля, в цель ${hits} из ${shots}.`;let fastShown=1;
+    else if(rangePct!=null&&rangePct<=20&&misses>=race.ranges.length*2){const body='';
       v(3,'fast',[['Быстрее почти всех на рубеже — и много мимо.',body],['На рубеже — среди самых быстрых, но точности не хватило.',body],['Стреляли быстро, попадали мало.',body]]);}
-    else if(rangePct!=null&&rangePct>=60&&misses<=race.ranges.length){const body=`В цель ${hits} из ${shots}, скорость стрельбы — вторая половина поля.`;
+    else if(rangePct!=null&&rangePct>=60&&misses<=race.ranges.length){const body='';
       v(2,'slow',[['Точно, но не спеша.',body],['Мишени закрыты, но на рубеже вы задержались.',body],['Точность есть — скорости на рубеже не хватило.',body]]);}
-    if(prone.length&&stand.length){const p=sumMisses(prone),s=sumMisses(stand),body=`Лёжа ${p} ${plural(p,'промах','промаха','промахов')}, стоя ${s}.`;
+    if(prone.length&&stand.length){const p=sumMisses(prone),s=sumMisses(stand),body='';
       if(s-p>=2)v(2,'stand',[['Стойка забирает больше всего.',body],['Основные промахи — стоя.',body],['Стоя мишени уходили чаще.',body]]);
       else if(p-s>=2)v(2,'prone',[['Лёжа промахов больше, чем стоя.',body],['Основные промахи — лёжа.',body],['Лёжа мишени уходили чаще.',body]]);
       else if(p>0&&p===s)v(1,'even',[['Промахи поровну лёжа и стоя.',body],['Лёжа и стоя — одинаково.',body],['Ни одна из позиций не выделяется.',body]]);}
   }else{k(1,'Промахи на этом этапе не записаны.','Есть только время и места.');notes.push('В протоколе этого этапа рубежи не выделены: отрезки идут так, как их записал хронометраж.');}
   if(lapPct.length&&finPct!=null&&lapPct[0]<=25&&finPct-lapPct[0]>=15){const body='Места уходят на рубежах.';
-    v(3,'lost',[[`На первом круге — в первых ${lapPct[0]}%, на финише — ${finPct}%.`,body],[`Начали в первых ${lapPct[0]}% поля, финишировали в первых ${finPct}%.`,body],[`После первого круга — первые ${lapPct[0]}% поля, на финише — ${finPct}%.`,body]]);}
-  if(lapPct.length>=3){const a=lapPct[0],b=lapPct[lapPct.length-1],body=`Первый — первые ${a}% поля, последний — ${b}%.`;
+    const l1=race.laps.find(l=>l.pos);v(3,'lost',[[`Первый круг — ${l1.pos}-е время, на финише — ${race.pos}-е место.`,body],[`На первом круге — ${l1.pos}-е время, в итоге — ${race.pos}-е место.`,body],[`${l1.pos}-е время на первом круге, ${race.pos}-е место на финише.`,body]]);}
+  if(lapPct.length>=3){const a=lapPct[0],b=lapPct[lapPct.length-1],lp=race.laps.filter(l=>l.pos&&race.of),body=`Первый круг — ${lp[0].pos}-е время, последний — ${lp[lp.length-1].pos}-е.`;
     if(b-a>=20)v(1,'fade',[['Последний круг заметно тяжелее первого.',body],['К концу гонки ход проседает.',body],['Финишный круг дался тяжелее стартового.',body]]);}
 
   let cost=raceCost(race)??missCost(allRaces);
@@ -445,12 +459,12 @@ async function raceView(name,race,allRaces){
       el('status').textContent='Сравниваю с соперниками…';
       const field=await fieldTimes(race),cat=field.filter(x=>x.cat===race.catName).map(x=>x.t).sort((a,b)=>a-b);
       if(loops)cost=fieldCost(field)??cost;
-      const vc=vsCategory(race,field);
-      if(vc&&vc.lapD!=null){const d=vc.lapD,body=`Первый круг ${fmt(vc.lap)}, у категории ${fmt(vc.lapMed)}.`;
+      const vc=vsCategory(race,field),catNb=/\d/.test(race.catName||'')?race.catName.replace(/ /g,'\u00a0'):`\u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0438 \u00ab${race.catName}\u00bb`;
+      if(vc&&vc.lapD!=null){const d=vc.lapD,body=`Ваш первый круг — ${fmt(vc.lap)}, у типичного из ${vc.n} ${plural(vc.n,'участника','участников','участников')} ${catNb} — ${fmt(vc.lapMed)}.`;
         v(Math.abs(d)>=5?2:1,'catlap',d>=3?[[`Ход быстрее категории на ${d}%.`,body],[`На лыжне вы быстрее своей категории — на ${d}%.`,body],[`Первый круг — на ${d}% быстрее категории.`,body]]
           :d<=-3?[[`Ход медленнее категории на ${-d}%.`,body],[`На лыжне категория быстрее — на ${-d}%.`,body],[`Первый круг — на ${-d}% медленнее категории.`,body]]
           :[['Ход — на уровне категории.',body],['На лыжне вы шли как своя категория.',body],['Первый круг — как у категории.',body]]);}
-      if(vc&&vc.rngD!=null&&!out.some(f=>f.key==='fast'||f.key==='slow')){const d=vc.rngD,body=`Рубежи ${fmt(vc.rng)}, у категории ${fmt(vc.rngMed)}.`;
+      if(vc&&vc.rngD!=null&&!out.some(f=>f.key==='fast'||f.key==='slow')){const d=vc.rngD,body=`Ваши рубежи — ${fmt(vc.rng)}, у типичного из ${vc.n} ${plural(vc.n,'участника','участников','участников')} ${catNb} — ${fmt(vc.rngMed)}. Без штрафных кругов.`;
         v(Math.abs(d)>=10?2:1,'catrng',d>=3?[[`На рубеже быстрее категории на ${d}%.`,body],[`Рубеж вы прошли быстрее своей категории — на ${d}%.`,body],[`Время на рубеже — на ${d}% меньше, чем у категории.`,body]]
           :d<=-3?[[`На рубеже дольше категории на ${-d}%.`,body],[`Рубеж категория прошла быстрее — на ${-d}%.`,body],[`Время на рубеже — на ${-d}% больше, чем у категории.`,body]]
           :[['На рубеже — как категория.',body],['Время на рубеже на уровне категории.',body],['Рубеж — без отличий от категории.',body]]);}
@@ -458,7 +472,7 @@ async function raceView(name,race,allRaces){
       if(race.hasFire&&peers.length>=5){
         const avg=peers.reduce((n,x)=>n+x.pm.concat(x.sm).reduce((a,b)=>a+b,0),0)/peers.length;
         const ap=peers.reduce((n,x)=>n+x.pm.reduce((a,b)=>a+b,0),0)/peers.length,as=peers.reduce((n,x)=>n+x.sm.reduce((a,b)=>a+b,0),0)/peers.length;
-        const p=sumMisses(prone),s2=sumMisses(stand),body=`Лёжа ${p} (категория ${dec(ap)}), стоя ${s2} (${dec(as)}).`;
+        const p=sumMisses(prone),s2=sumMisses(stand),body=`Лёжа ${p} против ${dec(ap)}, стоя ${s2} против ${dec(as)}.`;
         if(misses<=avg-1.5)v(3,'catbetter',[[`Промахов меньше, чем у категории: ${misses} против ${dec(avg)}.`,body],[`Стреляли точнее своей категории: ${misses} ${plural(misses,'промах','промаха','промахов')} против ${dec(avg)}.`,body],[`У категории в среднем ${dec(avg)} промаха, у вас — ${misses}.`,body]]);
         else if(misses>=avg+1.5)v(2,'catworse',[[`Промахов больше, чем у категории: ${misses} против ${dec(avg)}.`,body],[`Категория стреляла точнее: в среднем ${dec(avg)} промаха, у вас ${misses}.`,body],[`У соперников вашей категории в среднем ${dec(avg)} промаха, у вас — ${misses}.`,body]]);
         else v(1,'catsame',[[`По промахам — на уровне категории: ${misses} против ${dec(avg)}.`,body],[`Промахов примерно как у категории: ${misses} против ${dec(avg)}.`,body],[`Стрельба на уровне вашей категории.`,body]]);
@@ -470,6 +484,7 @@ async function raceView(name,race,allRaces){
         const body=`${catPlace&&catPlace<race.catPos?`В категории — ${catPlace}-е вместо ${race.catPos}-го. `:''}Промах ≈ ${cost} с. Оценка, не результат.`;
         if(place<race.pos)v(3,'whatif',[[`Минус ${m} — ${place}-е место вместо ${race.pos}-го.`,body],[`На ${m} меньше — и было бы ${place}-е место, а не ${race.pos}-е.`,body],[`${targetsWord(minus)} дали бы ${place}-е место вместо ${race.pos}-го.`,body]]);
       }
+      if(out.some(f=>(f.key||'').startsWith('cat')&&f.key!=='catlap'&&f.key!=='catrng'))for(let i=out.length-1;i>=0;i--)if(out[i].key==='even')out.splice(i,1);
       if(race.pos&&race.pos<=3){
         const behind=field.map(x=>x.t).filter(x=>x>race.result).sort((a,b)=>a-b)[0];
         if(behind!=null){const gap=Math.round(behind-race.result),body=`Отрыв от следующего — ${gap}\u00a0с.`;
@@ -479,12 +494,12 @@ async function raceView(name,race,allRaces){
       const faster=cat.filter(x=>x<race.result);
       if(race.catPos&&race.catPos>1&&faster.length){
         const gap=Math.round(race.result-faster[faster.length-1]),n=Math.max(1,Math.ceil(gap/(cost||1))),pl=race.catPos-1;
-        const body=loops&&cost?`≈ ${targetsWord(n)}.`:'По итоговому времени.';
-        v(2,'gap',[[`До ${pl}-го места в категории — ${gap} с.`,body],[`${pl}-е место в категории было в ${gap} с от вас.`,body],[`От ${pl}-го места в категории вас отделили ${gap} с.`,body]]);
+        const body=loops&&cost?`≈ ${targetsWord(n)}.`:'';
+        const gs=gap>=60?fmt(gap):gap+' с';v(2,'gap',[[`До ${pl}-го места в категории — ${gs}.`,body],[`${pl}-е место в категории было в ${gs} от вас.`,body],[`От ${pl}-го места в категории вас отделили ${gs}.`,body]]);
       }
       if(race.catPos&&race.catPos>3&&cat.length>=3){
         const gap=Math.round(race.result-cat[2]),n=Math.ceil(gap/(cost||1));
-        const body=loops&&cost?`≈ ${n} ${plural(n,'промах','промаха','промахов')}.`:'По итоговому времени.';
+        const body=loops&&cost?`≈ ${n} ${plural(n,'промах','промаха','промахов')}.`:'';
         if(gap>0)v(1,'podium',[[`До призового места в категории — ${fmt(gap)}.`,body],[`Призовое место в категории — в ${fmt(gap)} от вас.`,body],[`До тройки в категории — ${fmt(gap)}.`,body]]);
       }
     }catch(e){}
@@ -522,8 +537,8 @@ async function raceView(name,race,allRaces){
     }
     findings.splice(0,findings.length,...out.sort((a,b)=>b.w-a.w).slice(0,4));
   }
-  const shoot=race.ranges.map((f,i)=>({label:f.fire.prone?'Лёжа':'Стоя',misses:f.fire.misses,pos:f.pos,time:f.time}));
-  const lines=[`${race.type} · ${race.cat} · ${placeText(race)}${race.resultText?' · '+race.resultText:''}`,...segs.map(s=>`${s.label}: ${s.time!=null?fmt(s.time):'—'}${s.pos?`, ${s.pos}-е место`:''}${s.misses!=null?`, промахов ${s.misses}`:''}`)];
+  const shoot=race.ranges.map((f,i)=>({label:f.fire.prone?'Лёжа':'Стоя',misses:f.fire.misses,pos:f.pos,time:f.time,est:f.fire.est}));
+  const lines=[`${race.type} · ${race.cat} · ${placeText(race)}${race.resultText?' · '+race.resultText:''}`,...segs.map(s=>`${s.label}: ${s.time!=null?fmt(s.time):'—'}${s.pos?`, ${s.pos}-е место`:''}${s.misses!=null?(race.est?`, штрафных кругов ${s.misses}`:`, промахов ${s.misses}`):''}`)];
   return {eyebrow:`${race.type} · ${race.cat}`,title:name,sub:`${dateRu(race.date)} · ${race.event}`,tiles,shoot,findings,lines,segs,race,notes,
     file:translit(race.type).replace(/[^A-Za-z]/g,'')+'_'+race.date.slice(0,10)};
 }
@@ -548,16 +563,18 @@ const rankBadge=(pos,of)=>pos&&of?`<span class="rank" style="background:var(--${
 function scoreHtml(t){return t.length?`<div class="score" style="--n:${t.length}">${t.map(([v,l])=>`<div><b>${esc(v)}</b><span>${esc(l)}</span></div>`).join('')}</div>`:'';}
 function shootHtml(v){
   if(!v.shoot||!v.shoot.length)return '';
-  if(v.segs)return `<div class="shoot">${v.shoot.map(s=>`<span class="lbl">${s.label}</span>${targets(s.misses)}<span class="meta">${s.time!=null?fmt(s.time):'—'} · ${s.pos??'—'}-е</span>`).join('')}</div>`;
+  if(v.segs){const est=v.shoot.some(s=>s.est);
+    return `<div class="shoot">${v.shoot.map(s=>`<span class="lbl">${s.label}</span>${targets(s.misses)}<span class="meta">${est?`${s.misses} ${plural(s.misses,'штрафной круг','штрафных круга','штрафных кругов')}`:`${s.time!=null?fmt(s.time):'—'} · ${s.pos?s.pos+'-е место':'—'}`}</span>`).join('')}</div>
+    <p class="note">${est?'Промахов в протоколе нет — показаны штрафные круги: обычно их столько же.':`Время на рубеже и место по нему среди всех ${v.race.of?v.race.of+' '+plural(v.race.of,'участника','участников','участников'):'участников'}.`}</p>`;}
   return `<div class="shoot">${v.shoot.map(s=>`<span class="lbl">${s.label}</span><div class="bar"><i style="width:${Math.round(100*s.hits/s.shots)}%"></i></div><span class="meta">${s.hits} из ${s.shots}</span>`).join('')}</div>`;
 }
 function stripHtml(v){
   const segs=v.segs.filter(s=>s.time);if(!segs.length)return '';
   return `<div class="strip" role="img" aria-label="Отрезки гонки">${segs.map(s=>`<div class="${s.kind==='r'?'r':'lvl-'+level(s.pos,v.race.of)}" style="flex:${Math.max(s.time,25)}" title="${esc(s.label)} · ${fmt(s.time)} · ${s.pos??'—'}-е"></div>`).join('')}</div>
-  <div class="legend"><span><i style="background:var(--good)"></i>первая четверть поля</span><span><i style="background:var(--mid)"></i>середина</span><span><i style="background:var(--weak)"></i>последние 40%</span><span><i class="r" style="background:var(--line)"></i>рубеж</span></div>`;
+  <div class="legend"><span><i style="background:var(--good)"></i>первые 25% участников</span><span><i style="background:var(--mid)"></i>середина</span><span><i style="background:var(--weak)"></i>последние 40%</span><span><i class="r" style="background:var(--line)"></i>рубеж</span></div>`;
 }
 function segsHtml(v){
-  return `<div class="card"><h2>По отрезкам</h2><p class="note" style="margin:2px 0 0">Число в кружке — место на отрезке среди всех ${v.race.of??''} участников гонки: чем меньше, тем быстрее.</p>${stripHtml(v)}<ul class="segs">${v.segs.map(s=>`<li><span>${esc(s.label)}${s.misses!=null?' '+targets(s.misses,true):''}</span><span class="tm">${s.time!=null?fmt(s.time):'—'}</span>${rankBadge(s.pos,v.race.of)||'<span></span>'}</li>`).join('')}</ul></div>`;
+  return `<div class="card"><h2>По отрезкам</h2><p class="note" style="margin:2px 0 0">В кружке — место на отрезке из ${v.race.of??'—'}.</p>${stripHtml(v)}<ul class="segs">${v.segs.map(s=>`<li><span>${esc(s.label)}${s.misses!=null?' '+targets(s.misses,true):''}</span><span class="tm">${s.time!=null?fmt(s.time):'—'}</span>${rankBadge(s.pos,v.race.of)||'<span></span>'}</li>`).join('')}</ul></div>`;
 }
 function racesHtml(races){
   const seasons={};
@@ -565,7 +582,7 @@ function racesHtml(races){
   return Object.keys(seasons).sort().reverse().map(y=>`<div class="card"><h2>Сезон ${y}–${String(+y+1).slice(2)}</h2><ul class="races">${seasons[y].sort(byDateDesc).map(r=>`<li><button type="button" data-race="${state.races.indexOf(r)}">
       <span class="what">${esc(r.type)} · ${esc(r.cat)}</span><span class="place">${r.ok?`${r.pos}<span class="muted">/${r.of??'—'}</span>`:'—'}</span>
       <span class="when">${dateRu(r.date)} · ${esc(r.event)}</span><span class="cat">${r.catPos?`${r.catPos}/${r.catOf??'—'} ${esc(r.catName||'')}`:''}</span>
-      <span class="tg">${r.hasFire?r.ranges.map(f=>targets(f.fire.misses,true)).join(''):'стрельба не записана'}</span></button></li>`).join('')}</ul></div>`).join('');
+      <span class="tg">${r.hasFire?r.ranges.map(f=>targets(f.fire.misses,true)).join('')+(r.est?'<span>по штрафным кругам</span>':''):'стрельба не записана'}</span></button></li>`).join('')}</ul></div>`).join('');
 }
 
 function showView(v){
@@ -582,7 +599,7 @@ function showView(v){
 function renderReport(name,races,cms){
   state={name,races,cms};track('report',{races:races.length,telegram:!!(tg&&tg.initData)});
   const evs=[];for(const r of [...races].sort(byDateDesc))if(!evs.some(e=>e.id===r.eventId))evs.push({id:r.eventId,label:`${dateRu(r.date)} · ${r.event}`});
-  const best=races.filter(r=>r.catPos).sort((a,b)=>a.catPos/(a.catOf||1)-b.catPos/(b.catOf||1))[0];
+  const best=races.filter(r=>r.catPos).sort((a,b)=>a.catPos-b.catPos||(b.catOf||0)-(a.catOf||0))[0];
   el('report').innerHTML=`<div class="card"><p class="person">${esc(name)}</p><p class="person-sub">${races.length} ${plural(races.length,'гонка','гонки','гонок')} в протоколах${best?` · лучшее — ${best.catPos}-е из ${best.catOf??'—'} в категории (${best.type.toLowerCase()}, ${dateRu(best.date)})`:''}</p>
     <div class="pick"><label>Этап<select id="pick-event"><option value="">Все гонки</option>${evs.map(e=>`<option value="${esc(e.id)}">${esc(e.label)}</option>`).join('')}</select></label><label>Гонка<select id="pick-race" disabled><option value="">—</option></select></label></div></div><div id="view"></div>`;
   el('report').hidden=false;
@@ -682,11 +699,22 @@ el('search-form').onsubmit=async e=>{
     found=await search(q);
     if(!found.length){el('status').textContent='В протоколах никого не нашлось. Проверьте написание; в протоколах бывает и латиница.';return;}
     const groups={};for(const p of found){const k=normName(p.fullName);(groups[k]=groups[k]||{name:p.fullName,list:[]}).list.push(p);}
-    const keys=Object.keys(groups);
-    el('names').innerHTML=`<p class="muted">Найдено в протоколах. Отметьте, что это вы${keys.length>1?' (однофамильцев снимите)':''}:</p>`+keys.map(k=>`<label><input type="checkbox" value="${esc(k)}" checked> ${esc(groups[k].name)} <span class="muted">· ${groups[k].list.length} ${plural(groups[k].list.length,'гонка','гонки','гонок')}</span></label>`).join('');
+    const title=s=>s.toLowerCase().replace(/(^|[\s-])\S/g,c=>c.toUpperCase());
+    // Two entries with one name in the same race are two people: list such races one by one, unticked.
+    for(const k of Object.keys(groups)){const g=groups[k],ids=g.list.map(p=>p.raceId);if(new Set(ids).size===ids.length)continue;
+      el('status').textContent='Есть полные тёзки — загружаю их гонки…';
+      const rs=(await loadProfiles(g.list)).sort(byDateDesc);delete groups[k];
+      for(const r of rs)groups[k+'|'+r.id]={name:g.name,twin:k,label:`${dateRu(r.date)} · ${r.type==='Гонка'?r.event:r.type.toLowerCase()} · ${r.ok?r.pos+'-е':'—'}${r.catName?' · '+r.catName:''}`,list:[g.list.find(p=>p.participantId===r.id)]};
+    }
+    const keys=Object.keys(groups).sort((x,y)=>(groups[x].twin?1:0)-(groups[y].twin?1:0)||normName(groups[x].name).localeCompare(normName(groups[y].name))),twins=keys.some(k=>groups[k].twin);
+    const row=k=>{const g=groups[k];return g.twin?`<label><input type="checkbox" value="${esc(k)}"> ${esc(g.label)}</label>`
+      :`<label><input type="checkbox" value="${esc(k)}" checked> ${esc(title(g.name))} <span class="muted">· ${g.list.length} ${plural(g.list.length,'гонка','гонки','гонок')}</span></label>`;};
+    const plain=keys.filter(k=>!groups[k].twin),twinNames=[...new Set(keys.filter(k=>groups[k].twin).map(k=>groups[k].twin))];
+    el('names').innerHTML=(plain.length?`<p class="muted">Отметьте себя${plain.length>1?', однофамильцев снимите':''}:</p>`+plain.map(row).join(''):'')
+      +twinNames.map(t=>{const ks=keys.filter(k=>groups[k].twin===t);return `<p class="muted">${esc(title(groups[ks[0]].name))} — таких участников несколько. Отметьте свои гонки:</p>`+ks.map(row).join('');}).join('');
     el('names').hidden=false;el('names-actions').hidden=false;el('status').textContent='';
     el('build').onclick=()=>build(keys.filter(k=>el('names').querySelector(`input[value="${CSS.escape(k)}"]`).checked).flatMap(k=>groups[k].list),groups);
-    if(keys.length===1)build(groups[keys[0]].list,groups);
+    if(keys.length===1&&!twins)build(groups[keys[0]].list,groups);
   }catch(err){el('status').textContent='Сервис протоколов не ответил. Попробуйте ещё раз через минуту.';el('status').classList.add('err');}
   finally{el('go').disabled=false;}
 };
