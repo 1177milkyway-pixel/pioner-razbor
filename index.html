@@ -346,7 +346,8 @@ async function raceView(name,race,allRaces){
       v(2,'slow',[['Точно, но не спеша.',body],['Мишени закрыты, но на рубеже вы задержались.',body],['Точность есть — скорости на рубеже не хватило.',body]]);}
     if(prone.length&&stand.length){const p=sumMisses(prone),s=sumMisses(stand),body=`Лёжа ${p} ${plural(p,'промах','промаха','промахов')}, стоя ${s}.`;
       if(s-p>=2)v(2,'stand',[['Стойка забирает больше всего.',body],['Основные промахи — стоя.',body],['Стоя мишени уходили чаще.',body]]);
-      else if(p-s>=2)v(2,'prone',[['Лёжа промахов больше, чем стоя.',body],['Основные промахи — лёжа.',body],['Лёжа мишени уходили чаще.',body]]);}
+      else if(p-s>=2)v(2,'prone',[['Лёжа промахов больше, чем стоя.',body],['Основные промахи — лёжа.',body],['Лёжа мишени уходили чаще.',body]]);
+      else if(p>0&&p===s)v(1,'even',[['Промахи поровну лёжа и стоя.',body],['Лёжа и стоя — одинаково.',body],['Ни одна из позиций не выделяется.',body]]);}
   }else{k(1,'Промахи на этом этапе в протоколе не записаны.','Видны время и места на кругах и рубежах.');notes.push('В протоколе этого этапа рубежи не выделены: отрезки идут так, как их записал хронометраж.');}
   if(lapPct.length&&finPct!=null&&lapPct[0]<=25&&finPct-lapPct[0]>=15){const body='Места уходят на рубежах и штрафных кругах.';
     v(3,'lost',[[`На первом круге — в первых ${lapPct[0]}%, на финише — ${finPct}%.`,body],[`Начали в первых ${lapPct[0]}% поля, финишировали в первых ${finPct}%.`,body],[`После первого круга — первые ${lapPct[0]}% поля, на финише — ${finPct}%.`,body]]);}
@@ -355,41 +356,69 @@ async function raceView(name,race,allRaces){
 
   const cost=raceCost(race)??missCost(allRaces);
   if(race.type==='Индивидуальная'&&race.hasFire)notes.push('В индивидуальной гонке штраф начисляется иначе, чем штрафным кругом, поэтому цену промаха здесь не считаем.');
-  if(race.result!=null&&race.hasFire&&race.type!=='Индивидуальная'){
+  const loops=race.type!=='Индивидуальная';
+  if(race.result!=null){
     try{
       el('status').textContent='Сравниваю с соперниками…';
       const field=await fieldTimes(race),cat=field.filter(x=>x.cat===race.catName).map(x=>x.t).sort((a,b)=>a-b);
-      if(cost&&misses>=2){
+      if(loops&&cost&&misses>=2){
         const minus=Math.min(3,misses),t=race.result-minus*cost,m=`${minus} ${plural(minus,'промах','промаха','промахов')}`;
         const place=Math.max(1,race.pos-field.filter(x=>x.t>=t&&x.t<race.result).length);
         const catPlace=race.catPos?Math.max(1,race.catPos-cat.filter(x=>x>=t&&x<race.result).length):null;
         const body=`${catPlace&&catPlace<race.catPos?`В категории — ${catPlace}-е место вместо ${race.catPos}-го. `:''}Это оценка, а не результат: промах здесь стоил около ${cost} секунд.`;
         if(place<race.pos)v(3,'whatif',[[`Минус ${m} — ${place}-е место вместо ${race.pos}-го.`,body],[`На ${m} меньше — и было бы ${place}-е место, а не ${race.pos}-е.`,body],[`${targetsWord(minus)} дали бы ${place}-е место вместо ${race.pos}-го.`,body]]);
       }
+      if(race.pos&&race.pos<=3){
+        const behind=field.map(x=>x.t).filter(x=>x>race.result).sort((a,b)=>a-b)[0];
+        if(behind!=null){const gap=Math.round(behind-race.result),body=`Ближайший соперник позади — в ${gap}\u00a0с.`;
+          if(race.pos===1)v(5,'win',[[`Победа в гонке — 1-е место из ${race.of}.`,body],[`Первое место из ${race.of} участников.`,body],[`Вы выиграли гонку: 1-е место из ${race.of}.`,body]]);
+          else v(5,'top3',[[`${race.pos}-е место в гонке из ${race.of}.`,body],[`Подиум гонки: ${race.pos}-е место из ${race.of}.`,body],[`В тройке лучших: ${race.pos}-е место из ${race.of}.`,body]]);}
+      }
       const faster=cat.filter(x=>x<race.result);
       if(race.catPos&&race.catPos>1&&faster.length){
         const gap=Math.round(race.result-faster[faster.length-1]),n=Math.max(1,Math.ceil(gap/(cost||1))),pl=race.catPos-1;
-        const body=cost?`Это примерно ${targetsWord(n)}.`:'';
+        const body=loops&&cost?`Это примерно ${targetsWord(n)}.`:'По итоговому времени.';
         v(2,'gap',[[`До ${pl}-го места в категории — ${gap} с.`,body],[`${pl}-е место в категории было в ${gap} с от вас.`,body],[`От ${pl}-го места в категории вас отделили ${gap} с.`,body]]);
       }
       if(race.catPos&&race.catPos>3&&cat.length>=3){
         const gap=Math.round(race.result-cat[2]),n=Math.ceil(gap/(cost||1));
-        const body=cost?`Около ${n} ${plural(n,'промаха','промахов','промахов')} при вашем ходе.`:'';
+        const body=loops&&cost?`Около ${n} ${plural(n,'промаха','промахов','промахов')} при вашем ходе.`:'Отставание по итоговому времени.';
         if(gap>0)v(1,'podium',[[`До призового места в категории — ${fmt(gap)}.`,body],[`Призовое место в категории — в ${fmt(gap)} от вас.`,body],[`До тройки в категории — ${fmt(gap)}.`,body]]);
       }
     }catch(e){}
   }
+  if(out.length<2&&race.ok&&!race.catPos&&race.pos>3)k(0,`${race.pos}-е место из ${race.of??'—'} в гонке.`,'Место в категории в протоколе не указано.');
+  if(out.length<2&&race.ok&&race.catPos)k(0,`${race.catPos}-е место из ${race.catOf??'—'} в категории ${race.catName||''}.`.replace(/ \./,'.'),`В общем зачёте — ${race.pos}-е из ${race.of??'—'}.`);
   const findings=out.sort((a,b)=>b.w-a.w).slice(0,5);
   const segs=[];let lap=0,rng=0;
   for(const r of race.order){if(r.fire){rng++;segs.push({kind:'r',label:`Рубеж ${rng} · ${r.fire.prone?'лёжа':'стоя'}`,time:r.time,pos:r.pos,misses:r.fire.misses});}else{lap++;segs.push({kind:'l',label:race.hasFire?`Круг ${lap}`:`Отрезок ${lap}`,time:r.time,pos:r.pos});}}
   if(!race.hasFire){
-    const times=segs.map(x=>x.time).filter(Boolean),mid=median(times);let lapN=0,rngN=0;
-    for(const x of segs){if(x.time&&mid&&x.time<0.45*mid){rngN++;x.kind='r';x.label=`Рубеж ${rngN} со штрафными`;}else{lapN++;x.label=`Круг ${lapN}`;}}
+    // A range is a segment shorter than both laps around it (lap, range, lap, range, lap …).
+    const t=segs.map(x=>x.time);let lapN=0,rngN=0;
+    const between=segs.length>=3&&segs.length%2===1&&segs.every((x,i)=>i%2===0||(t[i]&&t[i-1]&&t[i+1]&&t[i]<t[i-1]&&t[i]<t[i+1]));
+    segs.forEach((x,i)=>{if(between&&i%2===1){rngN++;x.kind='r';x.label=`Рубеж ${rngN} со штрафными`;}else{lapN++;x.label=between?`Круг ${lapN}`:`Отрезок ${lapN}`;}});
     const worst=segs.filter(x=>x.kind==='r'&&x.pos&&race.of).sort((a,b)=>b.pos-a.pos)[0];
     if(worst&&level(worst.pos,race.of)==='w'){const n=segs.filter(x=>x.kind==='r').indexOf(worst)+1;
       k(2,`${n}-й рубеж — ${worst.pos}-е время из ${race.of}.`,'Время рубежа здесь включает штрафные круги: сами промахи в протоколе этого этапа не записаны.');
       findings.splice(0,findings.length,...out.sort((a,b)=>b.w-a.w).slice(0,5));}
     if(rngN)notes.push('Рубежи на этом этапе определены по длительности отрезков: короткие отрезки между кругами — стрельба вместе со штрафными кругами.');
+  }
+  // Strengths: the best lap and clean shooting. For the leading places they go first.
+  {
+    const lead=race.pos&&race.of&&(race.pos<=10||race.pos/race.of<=.05),w=lead?4:1;
+    const laps=segs.filter(x=>x.kind!=='r'&&x.pos&&x.label.startsWith('Круг'));
+    const best=[...laps].sort((a,b)=>a.pos-b.pos)[0];
+    if(best&&race.of&&(best.pos<=3||best.pos/race.of<=.1)){
+      const body=best.pos===1?`${fmt(best.time)} — быстрее всех участников на этом круге.`:`${fmt(best.time)} — ${best.pos}-е время среди ${race.of} участников.`;
+      out.push(V(w,'bestlap',best.pos===1?[[`${best.label} — лучшее время в гонке.`,body],[`${best.label} вы прошли быстрее всех.`,body],[`Быстрее всех на ${best.label.replace('Круг ','')}-м круге.`,body]]
+        :[[`${best.label} — ${best.pos}-е время из ${race.of}.`,'Ваш лучший отрезок в этой гонке.'],[`Сильнейший отрезок — ${best.label.toLowerCase()}.`,`${best.pos}-е время из ${race.of}.`],[`На ${best.label.replace('Круг ','')}-м круге — ${best.pos}-е время из ${race.of}.`,'Ваш лучший отрезок в этой гонке.']]));
+    }
+    if(race.hasFire&&misses>0){
+      const clean=race.ranges.filter(f=>f.fire.misses===0).sort((a,b)=>(a.pos||999)-(b.pos||999))[0];
+      if(clean){const where=clean.fire.prone?'Лёжа':'Стоя',body=clean.pos?`И ${clean.pos}-е время на этом рубеже из ${race.of}.`:'Все пять мишеней.';
+        out.push(V(w,'clean1',[[`${where} — 5 из 5.`,body],[`${where} — чистый рубеж.`,body],[`${where} без промахов.`,body]]));}
+    }
+    findings.splice(0,findings.length,...out.sort((a,b)=>b.w-a.w).slice(0,5));
   }
   const shoot=race.ranges.map((f,i)=>({label:f.fire.prone?'Лёжа':'Стоя',misses:f.fire.misses,pos:f.pos,time:f.time}));
   const lines=[`${race.type} · ${race.cat} · ${placeText(race)}${race.resultText?' · '+race.resultText:''}`,...segs.map(s=>`${s.label}: ${s.time!=null?fmt(s.time):'—'}${s.pos?`, ${s.pos}-е место`:''}${s.misses!=null?`, промахов ${s.misses}`:''}`)];
