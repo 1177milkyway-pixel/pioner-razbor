@@ -10,6 +10,7 @@
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0d1419;--card:#152029;--ink:#eef4f7;--text:#dbe5ea;--muted:#91a3ad;--line:#26343e;--accent:#3fbf9c;--accent-text:#06221b;--hit:#3fbf9c;--miss:#ef7a5f;--good:#3fbf9c;--mid:#e0b552;--weak:#ef7a5f;--soft:#1b2832;--warn:#ef9a74}}
 :root[data-theme="dark"]{--bg:#0d1419;--card:#152029;--ink:#eef4f7;--text:#dbe5ea;--muted:#91a3ad;--line:#26343e;--accent:#3fbf9c;--accent-text:#06221b;--hit:#3fbf9c;--miss:#ef7a5f;--good:#3fbf9c;--mid:#e0b552;--weak:#ef7a5f;--soft:#1b2832;--warn:#ef9a74}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
 main{max-width:720px;margin:0 auto;padding:20px 16px 40px}
 .brand{display:flex;align-items:center;gap:10px;margin:0 0 4px}
@@ -35,9 +36,8 @@ button:disabled{opacity:.55;cursor:default}
 .pick label{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted);min-width:0}
 select{width:100%;font:inherit;color:var(--text);background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:10px;min-width:0}
 .eyebrow{text-transform:uppercase;letter-spacing:.06em;font-size:12px;font-weight:700;color:var(--muted);margin:0 0 12px}
-.score{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:0;margin:0 0 6px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
-.score div{padding:12px 4px 10px;border-right:1px solid var(--line)}
-.score div:last-child{border-right:0}
+.score{display:grid;grid-template-columns:repeat(var(--n,4),1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin:0 0 6px}
+.score div{background:var(--card);padding:12px 12px 10px}
 .score b{display:block;font-size:26px;line-height:1.1;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
 .score span{color:var(--muted);font-size:12px}
 .finds{list-style:none;margin:16px 0 0;padding:0}
@@ -78,7 +78,7 @@ details.how{margin-top:6px}
 details.how summary{cursor:pointer;color:var(--muted);font-size:13px}
 .ai{background:var(--soft);border-radius:12px;padding:12px 14px;margin:14px 0 0}
 .ai p{margin:0}
-@media(max-width:520px){.pick{grid-template-columns:1fr}.score b{font-size:22px}.person{font-size:22px}}
+@media(max-width:520px){.score{grid-template-columns:repeat(2,1fr)}.score div:last-child:nth-child(odd){grid-column:span 2}.pick{grid-template-columns:1fr}.score b{font-size:22px}.person{font-size:22px}}
 </style>
 </head>
 <body>
@@ -332,7 +332,7 @@ async function raceView(name,race,allRaces){
   const notes=[METHOD];
   const tiles=[];
   if(race.ok)tiles.push([`${race.pos}/${race.of??'—'}`,'место в гонке']);
-  if(race.catPos)tiles.push([`${race.catPos}/${race.catOf??'—'}`,'в категории '+(race.catName||'')]);
+  if(race.catPos)tiles.push([`${race.catPos}/${race.catOf??'—'}`,'в категории '+(race.catName||'').replace(/ /g,' ')]);
   if(race.hasFire)tiles.push([`${hits}/${shots}`,'попаданий']);
   if(rangePct!=null)tiles.push(['топ '+rangePct+'%','скорость на рубеже']);
 
@@ -347,7 +347,7 @@ async function raceView(name,race,allRaces){
     if(prone.length&&stand.length){const p=sumMisses(prone),s=sumMisses(stand),body=`Лёжа ${p} ${plural(p,'промах','промаха','промахов')}, стоя ${s}.`;
       if(s-p>=2)v(2,'stand',[['Стойка забирает больше всего.',body],['Основные промахи — стоя.',body],['Стоя мишени уходили чаще.',body]]);
       else if(p-s>=2)v(2,'prone',[['Лёжа промахов больше, чем стоя.',body],['Основные промахи — лёжа.',body],['Лёжа мишени уходили чаще.',body]]);}
-  }else{k(1,'Стрельба на этом этапе в протоколе не записана.','Видны только время и места.');notes.push('В протоколе этого этапа рубежи не выделены: отрезки идут так, как их записал хронометраж.');}
+  }else{k(1,'Промахи на этом этапе в протоколе не записаны.','Видны время и места на кругах и рубежах.');notes.push('В протоколе этого этапа рубежи не выделены: отрезки идут так, как их записал хронометраж.');}
   if(lapPct.length&&finPct!=null&&lapPct[0]<=25&&finPct-lapPct[0]>=15){const body='Места уходят на рубежах и штрафных кругах.';
     v(3,'lost',[[`На первом круге — в первых ${lapPct[0]}%, на финише — ${finPct}%.`,body],[`Начали в первых ${lapPct[0]}% поля, финишировали в первых ${finPct}%.`,body],[`После первого круга — первые ${lapPct[0]}% поля, на финише — ${finPct}%.`,body]]);}
   if(lapPct.length>=3){const a=lapPct[0],b=lapPct[lapPct.length-1],body=`Первый круг — в первых ${a}% поля, последний — ${b}%. В последние круги входят и штрафные.`;
@@ -382,6 +382,15 @@ async function raceView(name,race,allRaces){
   const findings=out.sort((a,b)=>b.w-a.w).slice(0,5);
   const segs=[];let lap=0,rng=0;
   for(const r of race.order){if(r.fire){rng++;segs.push({kind:'r',label:`Рубеж ${rng} · ${r.fire.prone?'лёжа':'стоя'}`,time:r.time,pos:r.pos,misses:r.fire.misses});}else{lap++;segs.push({kind:'l',label:race.hasFire?`Круг ${lap}`:`Отрезок ${lap}`,time:r.time,pos:r.pos});}}
+  if(!race.hasFire){
+    const times=segs.map(x=>x.time).filter(Boolean),mid=median(times);let lapN=0,rngN=0;
+    for(const x of segs){if(x.time&&mid&&x.time<0.45*mid){rngN++;x.kind='r';x.label=`Рубеж ${rngN} со штрафными`;}else{lapN++;x.label=`Круг ${lapN}`;}}
+    const worst=segs.filter(x=>x.kind==='r'&&x.pos&&race.of).sort((a,b)=>b.pos-a.pos)[0];
+    if(worst&&level(worst.pos,race.of)==='w'){const n=segs.filter(x=>x.kind==='r').indexOf(worst)+1;
+      k(2,`${n}-й рубеж — ${worst.pos}-е время из ${race.of}.`,'Время рубежа здесь включает штрафные круги: сами промахи в протоколе этого этапа не записаны.');
+      findings.splice(0,findings.length,...out.sort((a,b)=>b.w-a.w).slice(0,5));}
+    if(rngN)notes.push('Рубежи на этом этапе определены по длительности отрезков: короткие отрезки между кругами — стрельба вместе со штрафными кругами.');
+  }
   const shoot=race.ranges.map((f,i)=>({label:f.fire.prone?'Лёжа':'Стоя',misses:f.fire.misses,pos:f.pos,time:f.time}));
   const lines=[`${race.type} · ${race.cat} · ${placeText(race)}${race.resultText?' · '+race.resultText:''}`,...segs.map(s=>`${s.label}: ${s.time!=null?fmt(s.time):'—'}${s.pos?`, ${s.pos}-е место`:''}${s.misses!=null?`, промахов ${s.misses}`:''}`)];
   return {eyebrow:`${race.type} · ${race.cat}`,title:name,sub:`${dateRu(race.date)} · ${race.event}`,tiles,shoot,findings,lines,segs,race,notes,
@@ -405,7 +414,7 @@ async function loadAiText(v){
 // --- render ---
 const targets=(misses,sm)=>`<span class="targets${sm?' sm':''}" aria-label="${5-misses} из 5">${Array.from({length:5},(_,i)=>`<i class="t${i>=5-misses?' m':''}"></i>`).join('')}</span>`;
 const rankBadge=(pos,of)=>pos&&of?`<span class="rank" style="background:var(--${{g:'good',m:'mid',w:'weak'}[level(pos,of)]})">${pos}</span>`:'';
-function scoreHtml(t){return t.length?`<div class="score">${t.map(([v,l])=>`<div><b>${esc(v)}</b><span>${esc(l)}</span></div>`).join('')}</div>`:'';}
+function scoreHtml(t){return t.length?`<div class="score" style="--n:${t.length}">${t.map(([v,l])=>`<div><b>${esc(v)}</b><span>${esc(l)}</span></div>`).join('')}</div>`:'';}
 function shootHtml(v){
   if(!v.shoot||!v.shoot.length)return '';
   if(v.segs)return `<div class="shoot">${v.shoot.map(s=>`<span class="lbl">${s.label}</span>${targets(s.misses)}<span class="meta">${s.time!=null?fmt(s.time):'—'} · ${s.pos??'—'}-е</span>`).join('')}</div>`;
@@ -417,7 +426,7 @@ function stripHtml(v){
   <div class="legend"><span><i style="background:var(--good)"></i>первая четверть поля</span><span><i style="background:var(--mid)"></i>середина</span><span><i style="background:var(--weak)"></i>последние 40%</span><span><i class="r" style="background:var(--line)"></i>рубеж</span></div>`;
 }
 function segsHtml(v){
-  return `<div class="card"><h2>По отрезкам</h2>${stripHtml(v)}<ul class="segs">${v.segs.map(s=>`<li><span>${esc(s.label)}${s.misses!=null?' '+targets(s.misses,true):''}</span><span class="tm">${s.time!=null?fmt(s.time):'—'}</span>${rankBadge(s.pos,v.race.of)||'<span></span>'}</li>`).join('')}</ul></div>`;
+  return `<div class="card"><h2>По отрезкам</h2><p class="note" style="margin:2px 0 0">Число в кружке — место на отрезке среди всех ${v.race.of??''} участников гонки: чем меньше, тем быстрее.</p>${stripHtml(v)}<ul class="segs">${v.segs.map(s=>`<li><span>${esc(s.label)}${s.misses!=null?' '+targets(s.misses,true):''}</span><span class="tm">${s.time!=null?fmt(s.time):'—'}</span>${rankBadge(s.pos,v.race.of)||'<span></span>'}</li>`).join('')}</ul></div>`;
 }
 function racesHtml(races){
   const seasons={};
@@ -480,7 +489,7 @@ function copyText(v){
 
 // --- image export ---
 function wrapLines(ctx,text,width){
-  const words=text.split(/\s+/),lines=[];let line='';
+  const words=text.split(/[ \t\n]+/),lines=[];let line='';  // plain spaces only: a no-break space keeps «М 30-39» together
   for(const w of words){const t=line?line+' '+w:w;if(ctx.measureText(t).width>width&&line){lines.push(line);line=w;}else line=t;}
   if(line)lines.push(line);return lines;
 }
@@ -490,26 +499,26 @@ function drawCard(v){
   const c=document.createElement('canvas'),ctx=c.getContext('2d');
   const items=(v.aiText?[{head:'',body:v.aiText}]:v.findings.slice(0,3).map(x=>splitFinding(x.t)));
   const plan=[];let y=P;
-  const text=(kind,str,size,weight,color,gap)=>{if(!str)return;ctx.font=`${weight} ${size}px ${font}`;const ls=wrapLines(ctx,str,W-2*P);plan.push({kind:'text',ls,size,weight,color,y});y+=ls.length*size*1.28+gap;};
-  text('eyebrow',(v.eyebrow+' · '+v.sub).toUpperCase(),24,'700',C.hit,18);
+  const text=(kind,str,size,weight,color,gap,width)=>{if(!str)return;ctx.font=`${weight} ${size}px ${font}`;const ls=wrapLines(ctx,str,width||W-2*P);plan.push({kind:'text',ls,size,weight,color,y});y+=ls.length*size*1.28+gap;};
+  text('eyebrow',(v.eyebrow+' · '+v.sub).toUpperCase(),24,'700',C.hit,18,W-2*P-270);
   text('title',v.title,64,'800',C.ink,30);
-  const scoreY=y;if(v.tiles.length)y+=150;
+  const scoreY=y;if(v.tiles.length)y+=184;
   const shootY=y;const shootRows=v.shoot?v.shoot.length:0;if(shootRows)y+=shootRows*58+30;
   for(const it of items){text('head',it.head,36,'700',C.ink,10);text('body',it.body,29,'400',C.text,34);}
   const footY=y+10;
-  c.width=W;c.height=Math.max(footY+P,1080);
+  c.width=W;c.height=Math.max(footY+P,640);
   ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,c.height);
   // target motif in the corner
-  for(let i=0;i<5;i++){ctx.beginPath();ctx.arc(W-P-i*46-18,P+16,16,0,Math.PI*2);ctx.fillStyle=i<3?C.hit:'transparent';ctx.fill();ctx.lineWidth=3;ctx.strokeStyle=i<3?C.hit:C.miss;ctx.stroke();}
+  for(let i=0;i<5;i++){ctx.beginPath();ctx.arc(W-P-212+i*46,P+16,16,0,Math.PI*2);ctx.fillStyle=i<3?C.hit:'transparent';ctx.fill();ctx.lineWidth=3;ctx.strokeStyle=i<3?C.hit:C.miss;ctx.stroke();}
   ctx.textBaseline='top';
   for(const b of plan){ctx.font=`${b.weight} ${b.size}px ${font}`;ctx.fillStyle=b.color;b.ls.forEach((l,i)=>ctx.fillText(l,P,b.y+i*b.size*1.28));}
   if(v.tiles.length){
     const n=v.tiles.length,bw=(W-2*P)/n;
-    ctx.strokeStyle=C.line;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(P,scoreY);ctx.lineTo(W-P,scoreY);ctx.moveTo(P,scoreY+128);ctx.lineTo(W-P,scoreY+128);ctx.stroke();
+    ctx.strokeStyle=C.line;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(P,scoreY);ctx.lineTo(W-P,scoreY);ctx.moveTo(P,scoreY+160);ctx.lineTo(W-P,scoreY+160);ctx.stroke();
     v.tiles.forEach(([val,l],i)=>{const x=P+i*bw+(i?24:0);
-      if(i){ctx.beginPath();ctx.moveTo(P+i*bw,scoreY+18);ctx.lineTo(P+i*bw,scoreY+110);ctx.stroke();}
+      if(i){ctx.beginPath();ctx.moveTo(P+i*bw,scoreY+18);ctx.lineTo(P+i*bw,scoreY+142);ctx.stroke();}
       ctx.fillStyle=C.ink;ctx.font=`800 ${n>3?46:54}px ${font}`;ctx.fillText(val,x,scoreY+22);
-      ctx.fillStyle=C.muted;ctx.font=`400 22px ${font}`;wrapLines(ctx,l,bw-30).slice(0,1).forEach(t=>ctx.fillText(t,x,scoreY+84));});
+      ctx.fillStyle=C.muted;ctx.font=`400 22px ${font}`;wrapLines(ctx,l,bw-30).slice(0,2).forEach((t,k)=>ctx.fillText(t,x,scoreY+84+k*26));});
   }
   if(shootRows){
     v.shoot.forEach((s,i)=>{const yy=shootY+i*58;ctx.fillStyle=C.ink;ctx.font=`600 28px ${font}`;ctx.fillText(s.label,P,yy+6);
