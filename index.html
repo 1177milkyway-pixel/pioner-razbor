@@ -1,0 +1,568 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Разбор гонок Pioner Cup</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{--bg:#eef2f4;--card:#fff;--ink:#0f1f2b;--text:#1b2b36;--muted:#5f707b;--line:#dde4e8;--accent:#0e7a63;--accent-text:#fff;--hit:#0e7a63;--miss:#c9462c;--good:#0e7a63;--mid:#c99a2e;--weak:#c9462c;--soft:#f5f8f9;--warn:#a2512b}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0d1419;--card:#152029;--ink:#eef4f7;--text:#dbe5ea;--muted:#91a3ad;--line:#26343e;--accent:#3fbf9c;--accent-text:#06221b;--hit:#3fbf9c;--miss:#ef7a5f;--good:#3fbf9c;--mid:#e0b552;--weak:#ef7a5f;--soft:#1b2832;--warn:#ef9a74}}
+:root[data-theme="dark"]{--bg:#0d1419;--card:#152029;--ink:#eef4f7;--text:#dbe5ea;--muted:#91a3ad;--line:#26343e;--accent:#3fbf9c;--accent-text:#06221b;--hit:#3fbf9c;--miss:#ef7a5f;--good:#3fbf9c;--mid:#e0b552;--weak:#ef7a5f;--soft:#1b2832;--warn:#ef9a74}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+main{max-width:720px;margin:0 auto;padding:20px 16px 40px}
+.brand{display:flex;align-items:center;gap:10px;margin:0 0 4px}
+.brand svg{flex:none}
+h1{font-size:24px;line-height:1.2;margin:0;color:var(--ink);letter-spacing:-.01em}
+.sub{color:var(--muted);font-size:14px;margin:6px 0 18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;margin:0 0 14px}
+form{display:flex;gap:8px}
+input[type=search]{flex:1;min-width:0;font:inherit;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--soft);color:var(--text)}
+button{font:inherit;font-weight:600;border:0;border-radius:12px;padding:12px 18px;background:var(--accent);color:var(--accent-text);cursor:pointer}
+button.secondary{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+button:disabled{opacity:.55;cursor:default}
+.status{color:var(--muted);font-size:14px;margin-top:10px;min-height:1.5em}
+.err{color:var(--warn)}
+.names label{display:flex;gap:10px;align-items:center;padding:6px 0}
+.names input{width:18px;height:18px}
+.muted{color:var(--muted)}
+.note{color:var(--muted);font-size:13px;margin:12px 0 0;line-height:1.45}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+.person{font-size:26px;font-weight:800;color:var(--ink);margin:0 0 2px;letter-spacing:-.01em}
+.person-sub{color:var(--muted);font-size:14px;margin:0 0 14px}
+.pick{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pick label{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted);min-width:0}
+select{width:100%;font:inherit;color:var(--text);background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:10px;min-width:0}
+.eyebrow{text-transform:uppercase;letter-spacing:.06em;font-size:12px;font-weight:700;color:var(--muted);margin:0 0 12px}
+.score{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:0;margin:0 0 6px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.score div{padding:12px 4px 10px;border-right:1px solid var(--line)}
+.score div:last-child{border-right:0}
+.score b{display:block;font-size:26px;line-height:1.1;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.score span{color:var(--muted);font-size:12px}
+.finds{list-style:none;margin:16px 0 0;padding:0}
+.finds li{padding:12px 0 12px 14px;border-left:3px solid var(--accent);margin:0 0 10px;background:linear-gradient(90deg,var(--soft),transparent 70%);border-radius:0 10px 10px 0}
+.finds li b{display:block;color:var(--ink);font-size:17px;line-height:1.3;margin:0 0 3px}
+.finds li span{color:var(--text);font-size:15px}
+.targets{display:inline-flex;gap:5px;vertical-align:middle}
+.t{width:16px;height:16px;border-radius:50%;display:inline-block;background:var(--hit)}
+.t.m{background:transparent;box-shadow:inset 0 0 0 2px var(--miss)}
+.targets.sm .t{width:10px;height:10px}
+.targets.sm .t.m{box-shadow:inset 0 0 0 1.5px var(--miss)}
+.shoot{display:grid;grid-template-columns:auto 1fr auto;gap:6px 12px;align-items:center;margin:14px 0 0}
+.shoot .lbl{font-weight:600;font-size:14px}
+.shoot .meta{color:var(--muted);font-size:13px;text-align:right;white-space:nowrap}
+.bar{height:10px;border-radius:6px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--hit);border-radius:6px}
+.strip{display:flex;gap:3px;margin:16px 0 6px;height:34px}
+.strip div{border-radius:6px;min-width:10px;position:relative}
+.strip .r{background:repeating-linear-gradient(135deg,var(--soft) 0 4px,var(--line) 4px 8px);border:1px solid var(--line)}
+.lvl-g{background:var(--good)}.lvl-m{background:var(--mid)}.lvl-w{background:var(--weak)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;color:var(--muted);font-size:12px;margin:4px 0 0}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.segs{list-style:none;margin:12px 0 0;padding:0}
+.segs li{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--line);font-size:15px}
+.segs .tm{font-variant-numeric:tabular-nums;color:var(--muted)}
+.rank{font-size:12px;font-weight:700;border-radius:20px;padding:2px 9px;color:#fff;font-variant-numeric:tabular-nums;white-space:nowrap}
+.races{list-style:none;margin:0;padding:0}
+.races li{border-top:1px solid var(--line)}
+.races button{all:unset;box-sizing:border-box;display:grid;grid-template-columns:1fr auto;gap:2px 12px;width:100%;padding:12px 2px;cursor:pointer}
+.races button:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:8px}
+.races .what{font-weight:600;color:var(--ink)}
+.races .when{color:var(--muted);font-size:13px}
+.races .place{text-align:right;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums}
+.races .cat{text-align:right;color:var(--muted);font-size:13px}
+.races .tg{grid-column:1/-1;margin-top:4px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--muted)}
+h2{font-size:18px;margin:0 0 4px;color:var(--ink)}
+details.how{margin-top:6px}
+details.how summary{cursor:pointer;color:var(--muted);font-size:13px}
+.ai{background:var(--soft);border-radius:12px;padding:12px 14px;margin:14px 0 0}
+.ai p{margin:0}
+@media(max-width:520px){.pick{grid-template-columns:1fr}.score b{font-size:22px}.person{font-size:22px}}
+</style>
+</head>
+<body>
+<main>
+  <div class="brand"><svg width="40" height="12" viewBox="0 0 40 12" aria-hidden="true"><g fill="var(--hit)"><circle cx="5" cy="6" r="4.5"/><circle cx="15" cy="6" r="4.5"/><circle cx="25" cy="6" r="4.5"/></g><g fill="none" stroke="var(--miss)" stroke-width="1.6"><circle cx="35" cy="6" r="3.7"/></g></svg><h1>Разбор гонки</h1></div>
+  <p class="sub">Pioner Cup · место в категории, стрельба лёжа и стоя, цена промаха — по официальным протоколам.</p>
+
+  <section class="card">
+    <form id="search-form">
+      <input id="q" type="search" placeholder="Фамилия" autocomplete="off" required>
+      <button id="go" type="submit">Найти</button>
+    </form>
+    <div id="status" class="status" role="status"></div>
+    <div id="names" class="names" hidden></div>
+    <div id="names-actions" class="actions" hidden><button id="build" type="button">Показать разбор</button></div>
+  </section>
+
+  <section id="report" hidden></section>
+</main>
+
+<script>
+'use strict';
+const API='https://results.pionercup.ru/api';
+// Address of the Yandex Cloud Function that writes the text; empty — text from rules only.
+// Function address for AI text (off: the model still mixes up meaning). On: 'https://functions.yandexcloud.net/d4eiuknd9i2hm25s30iq'
+const AI_URL_DEFAULT='';
+const AI_URL=new URLSearchParams(location.search).get('ai')||AI_URL_DEFAULT;
+const tg=window.Telegram&&window.Telegram.WebApp;
+if(tg&&tg.initData!==undefined){try{tg.ready();tg.expand();document.documentElement.dataset.theme=tg.colorScheme==='dark'?'dark':'light';}catch(e){}}
+
+const el=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const post=async(path,body)=>{const r=await fetch(API+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok)throw new Error('HTTP '+r.status);return r.json();};
+
+// --- helpers ---
+const TR={а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ё:'e',ж:'zh',з:'z',и:'i',й:'y',к:'k',л:'l',м:'m',н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'kh',ц:'ts',ч:'ch',ш:'sh',щ:'shch',ъ:'',ы:'y',ь:'',э:'e',ю:'yu',я:'ya'};
+const translit=s=>s.toLowerCase().split('').map(c=>TR[c]??c).join('').replace(/^./,c=>c.toUpperCase());
+const hasCyr=s=>/[а-яё]/i.test(s);
+const secs=t=>{if(!t||typeof t!=='string')return null;const p=t.split(':').map(Number);if(p.some(isNaN))return null;return p.length===3?p[0]*3600+p[1]*60+p[2]:p.length===2?p[0]*60+p[1]:null;};
+const fmt=s=>{if(s==null)return '—';s=Math.round(s);const m=Math.floor(s/60),r=s%60;return m+':'+String(r).padStart(2,'0');};
+const pct=(a,b)=>b?Math.round(100*a/b):null;
+const median=a=>{a=a.filter(x=>x!=null).sort((x,y)=>x-y);if(!a.length)return null;const m=Math.floor(a.length/2);return a.length%2?a[m]:(a[m-1]+a[m])/2;};
+const dateRu=iso=>{const d=new Date(iso);return d.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric'});};
+const normName=s=>s.trim().replace(/\s+/g,' ').toLowerCase();
+const plural=(n,a,b,c)=>{n=Math.abs(n)%100;const n1=n%10;if(n>10&&n<20)return c;if(n1>1&&n1<5)return b;if(n1===1)return a;return c;};
+async function pool(items,limit,fn){const out=new Array(items.length);let i=0;const workers=Array.from({length:Math.min(limit,items.length)},async()=>{while(i<items.length){const k=i++;try{out[k]=await fn(items[k]);}catch(e){out[k]={error:e};}}});await Promise.all(workers);return out;}
+
+function raceKind(name){
+  const n=name.toUpperCase();
+  const cat=/МАСТЕР/.test(n)?'Мастера':'Основная';
+  const type=/МАСС/.test(n)?'Масс-старт':/ИНДИВИД/.test(n)?'Индивидуальная':/ПРЕСЛЕД/.test(n)?'Преследование':/(СПРИНТ|SPRINT)/.test(n)?'Спринт':/СИНГЛ/.test(n)?'Сингл-микст':/ЭСТАФЕТ/.test(n)?'Эстафета':'Гонка';
+  return {cat,type};
+}
+
+// --- data ---
+let events=null,found=[];
+async function loadEvents(){
+  if(events)return events;
+  const r=await post('/events/list',{language:'ru',page:{skip:0,take:100}});
+  events=(r.list||[]).filter(e=>e.id).sort((a,b)=>a.beginDate<b.beginDate?1:-1);
+  return events;
+}
+
+async function search(q){
+  const ev=await loadEvents();
+  const terms=[q];if(hasCyr(q))terms.push(translit(q));
+  const jobs=[];for(const e of ev)for(const t of terms)jobs.push({e,t});
+  let done=0;
+  const res=await pool(jobs,6,async({e,t})=>{const r=await post('/events/searchParticipant',{searchValue:t,eventId:e.id,page:{skip:0,take:20},pageSize:25,language:'ru'});done++;el('status').textContent=`Ищу по этапам: ${done} из ${jobs.length}…`;return (r.participants||[]).map(p=>({...p,event:e}));});
+  const seen=new Set(),hits=[];
+  for(const list of res){if(!Array.isArray(list))continue;for(const p of list){if(p.disciplineCode&&p.disciplineCode!=='ski-biathlon')continue;if(seen.has(p.participantId))continue;seen.add(p.participantId);hits.push(p);}}
+  return hits;
+}
+
+async function loadProfiles(hits){
+  let done=0;
+  const res=await pool(hits,6,async h=>{const r=await post('/results/individual/profile',{participantId:h.participantId,raceId:h.raceId,language:'ru'});done++;el('status').textContent=`Загружаю гонки: ${done} из ${hits.length}…`;const x=r&&r.result&&r.result.results&&r.result.results[0];if(!x)return null;return parseRace(h,x,r);});
+  return res.filter(x=>x&&!x.error);
+}
+
+function parseRace(h,x,r){
+  const {cat,type}=raceKind(h.raceName);
+  const stages=(x.stageResults||[]).map(s=>({fire:s.firingLine?{misses:s.firingLine.missesNumber,prone:s.firingLine.type===2}:null,time:secs(s.individualResult),pos:s.position}));
+  const laps=stages.filter(s=>!s.fire),ranges=stages.filter(s=>s.fire),order=stages;
+  const total=r.participantCount||null;
+  return {
+    id:h.participantId,raceId:h.raceId,eventId:h.event.id,date:h.event.beginDate,event:h.event.title.replace(/^PIONER CUP\s*/i,''),
+    raceName:h.raceName,cat,type,name:h.fullName,
+    result:secs(x.individualResult),resultText:x.individualResult||'',ok:x.status===0&&(!!x.individualResult||x.position>0),
+    pos:x.position,of:total,catName:x.genderAgeNominationName,catPos:x.individualGenderAgePosition>0?x.individualGenderAgePosition:null,catOf:r.categoryParticipantCount||null,
+    laps,ranges,order,hasFire:ranges.length>0
+  };
+}
+
+async function fieldTimes(race){
+  const rows=[];
+  for(let skip=0;skip<600;skip+=100){const r=await post('/results/individual/get',{eventId:race.eventId,raceId:race.raceId,page:{skip,take:100},pageSize:100,language:'ru'});const part=(r.result&&r.result.results)||r.results||[];rows.push(...part);if(part.length<100)break;}
+  return rows.filter(x=>x.status===0&&secs(x.individualResult)!=null).map(x=>({t:secs(x.individualResult),cat:x.genderAgeNominationName}));
+}
+
+// --- analysis ---
+function shootingStats(races){
+  const s={prone:{shots:0,miss:0},stand:{shots:0,miss:0},rangeRanks:[],races:0};
+  for(const r of races){if(!r.hasFire)continue;s.races++;for(const f of r.ranges){const k=f.fire.prone?'prone':'stand';s[k].shots+=5;s[k].miss+=f.fire.misses;if(f.pos&&r.of)s.rangeRanks.push(f.pos/r.of);}}
+  s.proneAcc=s.prone.shots?pct(s.prone.shots-s.prone.miss,s.prone.shots):null;
+  s.standAcc=s.stand.shots?pct(s.stand.shots-s.stand.miss,s.stand.shots):null;
+  const all=s.prone.shots+s.stand.shots;s.acc=all?pct(all-s.prone.miss-s.stand.miss,all):null;
+  s.rangePct=s.rangeRanks.length?Math.round(100*median(s.rangeRanks)):null;
+  return s;
+}
+function missCost(races){
+  const costs=[];
+  for(const r of races){
+    if(!r.hasFire||r.type==='Индивидуальная'||r.laps.length<2)continue;
+    const misses=r.ranges.reduce((n,f)=>n+f.fire.misses,0);if(misses<3)continue;
+    const l1=r.laps[0].time;if(!l1)continue;
+    const extra=r.laps.slice(1).reduce((n,l)=>n+(l.time?l.time-l1:0),0);
+    const c=extra/misses;if(c>=10&&c<=60)costs.push(c);
+  }
+  return costs.length?Math.round(median(costs)):null;
+}
+
+// A finding: a short headline with the main number, and one line of support.
+const F=(w,head,body)=>({w,t:`<span class="k">${head}</span> ${body}`});
+const IN_RACE={'Спринт':'спринте','Масс-старт':'масс-старте','Преследование':'преследовании','Индивидуальная':'индивидуальной гонке','Сингл-микст':'сингл-миксте','Эстафета':'эстафете','Гонка':'гонке'};
+const targetsWord=n=>`${n} ${plural(n,'закрытая мишень','закрытые мишени','закрытых мишеней')}`;
+// The same facts in several wordings. The choice depends on the athlete's name, so one person
+// always reads the same text (screen, copied text and picture agree), while different people read different ones.
+let VOICE='';
+function V(w,key,variants){
+  let h=0;for(const c of VOICE+'|'+key)h=(h*31+c.charCodeAt(0))>>>0;
+  const [head,body]=variants[h%variants.length];return F(w,head,body);
+}
+
+function comments(races,lastWhatIf){
+  VOICE=races[0]?.name||'';
+  const out=[];
+  const fireRaces=races.filter(r=>r.hasFire&&r.ok);
+  const cats=[...new Set(fireRaces.map(r=>r.cat))];
+  for(const cat of cats){
+    const rs=fireRaces.filter(r=>r.cat===cat);const s=shootingStats(rs);
+    const label=cats.length>1?` (${cat})`:'';
+    if(s.acc!=null&&s.rangePct!=null){
+      const advice='Лишние 10–15 секунд на изготовку, скорее всего, окупятся закрытыми мишенями.';
+      if(s.rangePct<=20&&s.acc<60)out.push(V(3,'fast'+cat,[
+        [`Вы стреляете быстрее почти всех — и много мимо${label}.`,`По времени на рубеже вы в первых ${s.rangePct}% поля, а закрываете ${s.acc}% мишеней. ${advice}`],
+        [`Скорость на рубеже есть, точности не хватает${label}.`,`По времени стрельбы — первые ${s.rangePct}% поля, попаданий — ${s.acc}%. ${advice}`],
+        [`На рубеже вы торопитесь${label}.`,`По скорости стрельбы вы в первых ${s.rangePct}% поля, а в цель уходит ${s.acc}% выстрелов. ${advice}`]]));
+      else if(s.rangePct>=60&&s.acc>=70)out.push(V(2,'slow'+cat,[
+        [`Стреляете точно, но не спеша${label}.`,`${s.acc}% попаданий, а по времени на рубеже вы во второй половине поля. Запас по точности позволяет ускориться.`],
+        [`Точность есть — можно добавить скорость${label}.`,`${s.acc}% попаданий при времени на рубеже во второй половине поля.`],
+        [`Мишени закрываете, но на рубеже задерживаетесь${label}.`,`${s.acc}% попаданий; по времени стрельбы — вторая половина поля.`]]));
+    }
+    if(s.proneAcc!=null&&s.standAcc!=null&&s.prone.shots>=10&&s.stand.shots>=10){
+      const d=s.proneAcc-s.standAcc,nums=`Лёжа ${s.proneAcc}% попаданий (${s.prone.shots-s.prone.miss} из ${s.prone.shots}), стоя ${s.standAcc}% (${s.stand.shots-s.stand.miss} из ${s.stand.shots}).`;
+      if(d>=20)out.push(V(2,'stand'+cat,[[`Стойка — главная потеря${label}.`,nums],[`Больше всего мишеней теряется стоя${label}.`,nums],[`Слабое место — стрельба стоя${label}.`,nums]]));
+      else if(d<=-15)out.push(V(2,'prone'+cat,[[`Лёжа хуже, чем стоя — так бывает редко${label}.`,nums+' Стоит проверить изготовку лёжа.'],
+        [`Неожиданно: лёжа точность ниже, чем стоя${label}.`,nums+' Стоит проверить изготовку лёжа.'],[`Лёжа вы теряете больше, чем стоя${label}.`,nums+' Обычно бывает наоборот — стоит проверить изготовку лёжа.']]));
+    }
+  }
+  if(cats.length>1){
+    const a=shootingStats(fireRaces.filter(r=>r.cat==='Основная')),b=shootingStats(fireRaces.filter(r=>r.cat==='Мастера'));
+    if(a.proneAcc!=null&&b.proneAcc!=null&&a.prone.shots>=10&&b.prone.shots>=10&&a.proneAcc-b.proneAcc>=20){
+      const body=`В «Мастерах», со своей винтовкой, лёжа ${b.proneAcc}%; в Основной, с прокатной, — ${a.proneAcc}%. Причину протокол не покажет: пристрелка, изготовка после переноски или усталость от двух стартов в день.`;
+      out.push(V(3,'rifle',[['Со своей винтовкой лёжа — заметно хуже, чем с прокатной.',body],['С прокатной винтовкой лёжа вы стреляете заметно лучше.',body],['Своя винтовка лёжа пока проигрывает прокатной.',body]]));
+    }
+  }
+  const withLap=fireRaces.filter(r=>r.laps[0]&&r.laps[0].pos&&r.of);
+  if(withLap.length>=2){
+    const lapPct=Math.round(100*median(withLap.map(r=>r.laps[0].pos/r.of))),finPct=Math.round(100*median(withLap.map(r=>r.pos/r.of)));
+    const body=`До первой стрельбы вы обычно в первых ${lapPct}% поля, а на финише — в первых ${finPct}%.`;
+    if(lapPct<=25&&finPct-lapPct>=15)out.push(V(3,'ski',[['Лыжня — ваша сила, места уходят на рубежах.',body],['Ход сильный — результат теряется на стрельбе.',body],['До первой стрельбы вы высоко, дальше — ниже.',body]]));
+    else if(lapPct>=50&&finPct<lapPct-10){const b2=`До первой стрельбы вы обычно в ${lapPct}% поля, а финишируете выше — в первых ${finPct}%.`;
+      out.push(V(2,'skiweak',[['Стрельба вытягивает, резерв — на лыжне.',b2],['Стрельба поднимает вас вверх протокола.',b2],['Резерв — на лыжне: стрельба уже работает.',b2]]));}
+  }
+  const cost=missCost(fireRaces);
+  if(cost){const body='Столько в среднем прибавляет штрафной круг при вашем ходе. Оценка по разнице кругов; в неё попадает и усталость.';
+    out.push(V(1,'cost',[[`Каждый промах — около ${cost} секунд.`,body],[`Один промах обходится вам примерно в ${cost} секунд.`,body],[`Цена одного промаха — около ${cost} секунд.`,body]]));}
+  if(lastWhatIf)out.push(lastWhatIf);
+  const byDate=[...fireRaces].sort((a,b)=>a.date<b.date?-1:1);
+  if(byDate.length>=4){const h=Math.floor(byDate.length/2);const a=shootingStats(byDate.slice(0,h)).acc,b=shootingStats(byDate.slice(h)).acc;
+    const body='Первая половина ваших гонок против последней.';
+    if(a!=null&&b!=null&&b-a>=10)out.push(V(1,'up',[[`Точность растёт: ${a}% → ${b}%.`,body],[`По ходу гонок точность выросла: с ${a}% до ${b}%.`,body],[`Попадаете всё чаще: ${a}% → ${b}%.`,body]]));
+    else if(a!=null&&b!=null&&a-b>=10)out.push(V(1,'down',[[`Точность падает: ${a}% → ${b}%.`,body],[`По ходу гонок точность снизилась: с ${a}% до ${b}%.`,body],[`Попадаете реже, чем раньше: ${a}% → ${b}%.`,body]]));}
+  return out.sort((x,y)=>y.w-x.w).slice(0,5);
+}
+
+async function whatIf(races){
+  VOICE=races[0]?.name||'';
+  // Latest race; two races on one day are ordered by their id so the choice never changes between loads.
+  const last=races.filter(r=>r.hasFire&&r.ok&&r.result!=null&&r.type!=='Индивидуальная').sort((a,b)=>a.date!==b.date?(a.date<b.date?1:-1):(a.raceId<b.raceId?-1:1))[0];
+  if(!last)return null;
+  const misses=last.ranges.reduce((n,f)=>n+f.fire.misses,0);const cost=missCost(races);
+  if(!cost||misses<3)return null;
+  const field=await fieldTimes(last);if(field.length<10)return null;
+  const minus=Math.min(3,misses-1),t=last.result-minus*cost;
+  // Count only the rivals the saved time would overtake, starting from the official place.
+  const place=Math.max(1,last.pos-field.filter(x=>x.t>=t&&x.t<last.result).length);
+  if(place>=last.pos)return null;
+  const catField=field.filter(x=>x.cat===last.catName);
+  const catPlace=last.catPos?Math.max(1,last.catPos-catField.filter(x=>x.t>=t&&x.t<last.result).length):null;
+  const where=IN_RACE[last.type]||'старте',m=`${minus} ${plural(minus,'промах','промаха','промахов')}`;
+  const body=`${dateRu(last.date)}${catPlace&&catField.length&&catPlace<last.catPos?`, в категории — ${catPlace}-е вместо ${last.catPos}-го`:''}. Это оценка по итоговым временам соперников, а не результат.`;
+  return V(2,'whatif',[[`Минус ${m} в последнем ${where} — ${place}-е место вместо ${last.pos}-го.`,body],
+    [`Будь в последнем ${where} на ${m} меньше — было бы ${place}-е место, а не ${last.pos}-е.`,body],
+    [`${targetsWord(minus)} в последнем ${where} дали бы ${place}-е место вместо ${last.pos}-го.`,body]]);
+}
+
+// --- views ---
+// A view is what one screen, the copied text and the picture show.
+let state=null;
+const byDateDesc=(a,b)=>a.date<b.date?1:a.date>b.date?-1:0;
+const placeText=r=>r.ok?`${r.pos} из ${r.of??'—'}${r.catPos?`, в категории ${r.catPos} из ${r.catOf??'—'}`:''}`:'нет результата';
+const sumMisses=a=>a.reduce((n,f)=>n+f.fire.misses,0);
+const level=(pos,of)=>!pos||!of?'m':pos/of<=.25?'g':pos/of<=.6?'m':'w';
+function splitFinding(t){const d=document.createElement('div');d.innerHTML=t;const head=d.querySelector('.k')?.textContent||'';return {head,body:d.textContent.slice(head.length).trim()};}
+const METHOD='Места на отрезках — среди всех участников гонки. Цена промаха — оценка по разнице кругов до и после штрафных; в неё попадает и усталость. Источник — протоколы results.pionercup.ru.';
+
+function overallView(name,races,cms){
+  const fireRaces=races.filter(r=>r.hasFire&&r.ok),s=shootingStats(fireRaces);
+  const best=races.filter(r=>r.catPos).sort((a,b)=>a.catPos/(a.catOf||1)-b.catPos/(b.catOf||1))[0];
+  const tiles=[];
+  if(s.proneAcc!=null)tiles.push([s.proneAcc+'%','попаданий лёжа']);
+  if(s.standAcc!=null)tiles.push([s.standAcc+'%','попаданий стоя']);
+  if(s.rangePct!=null)tiles.push(['топ '+s.rangePct+'%','скорость на рубеже']);
+  if(best)tiles.push([`${best.catPos}/${best.catOf??'—'}`,'лучшее в категории']);
+  const shoot=[];
+  if(s.prone.shots)shoot.push({label:'Лёжа',hits:s.prone.shots-s.prone.miss,shots:s.prone.shots});
+  if(s.stand.shots)shoot.push({label:'Стоя',hits:s.stand.shots-s.stand.miss,shots:s.stand.shots});
+  const lines=[...races].sort(byDateDesc).map(r=>`${dateRu(r.date)} ${r.type} (${r.cat}): ${placeText(r)}${r.hasFire?' · промахи '+r.ranges.map(f=>f.fire.misses).join('-'):''}`);
+  const seasons=new Set(races.map(r=>{const d=new Date(r.date);return d.getMonth()>=6?d.getFullYear():d.getFullYear()-1;})).size;
+  return {eyebrow:'Все гонки',title:name,sub:`${races.length} ${plural(races.length,'гонка','гонки','гонок')} · ${seasons} ${plural(seasons,'сезон','сезона','сезонов')} · стрельба записана в ${fireRaces.length}`,
+    tiles,shoot,findings:cms,lines,file:'vse_gonki',notes:[METHOD,'Стрельба по рубежам записана в протоколах с января 2026 года; в более ранних гонках видны только время и места.'],
+    empty:'Для выводов о стрельбе мало гонок с записанными промахами.'};
+}
+
+function raceCost(r){
+  if(!r.hasFire||r.type==='Индивидуальная'||r.laps.length<2)return null;
+  const m=sumMisses(r.ranges),l1=r.laps[0].time;if(m<2||!l1)return null;
+  const c=r.laps.slice(1).reduce((n,l)=>n+(l.time?l.time-l1:0),0)/m;
+  return c>=10&&c<=60?Math.round(c):null;
+}
+
+async function raceView(name,race,allRaces){
+  const out=[];const k=(w,head,body)=>out.push(F(w,head,body));
+  const prone=race.ranges.filter(f=>f.fire.prone),stand=race.ranges.filter(f=>!f.fire.prone);
+  const misses=sumMisses(race.ranges),shots=race.ranges.length*5,hits=shots-misses;
+  const rangePct=race.ranges.length&&race.of?Math.round(100*median(race.ranges.map(f=>f.pos/race.of))):null;
+  const lapPct=race.laps.filter(l=>l.pos&&race.of).map(l=>Math.round(100*l.pos/race.of));
+  const finPct=race.ok&&race.of&&race.pos?Math.round(100*race.pos/race.of):null;
+  const notes=[METHOD];
+  const tiles=[];
+  if(race.ok)tiles.push([`${race.pos}/${race.of??'—'}`,'место в гонке']);
+  if(race.catPos)tiles.push([`${race.catPos}/${race.catOf??'—'}`,'в категории '+(race.catName||'')]);
+  if(race.hasFire)tiles.push([`${hits}/${shots}`,'попаданий']);
+  if(rangePct!=null)tiles.push(['топ '+rangePct+'%','скорость на рубеже']);
+
+  VOICE=name+'|'+race.raceId;
+  const v=(w,key,variants)=>out.push(V(w,key,variants));
+  if(race.hasFire){
+    if(misses===0)v(3,'clean',[['Ни одного промаха.','Результат решала лыжня.'],['Чистая стрельба — все мишени закрыты.','Результат решала лыжня.'],['Стрельба без промахов.','Всё остальное решила лыжня.']]);
+    else if(rangePct!=null&&rangePct<=20&&misses>=race.ranges.length*2){const body=`По времени стрельбы вы в первых ${rangePct}% поля, закрыто ${hits} из ${shots}.`;
+      v(3,'fast',[['Быстрее почти всех на рубеже — и много мимо.',body],['На рубеже — среди самых быстрых, но точности не хватило.',body],['Стреляли быстро, попадали мало.',body]]);}
+    else if(rangePct!=null&&rangePct>=60&&misses<=race.ranges.length){const body=`${hits} из ${shots}, а по времени на рубеже вы во второй половине поля.`;
+      v(2,'slow',[['Точно, но не спеша.',body],['Мишени закрыты, но на рубеже вы задержались.',body],['Точность есть — скорости на рубеже не хватило.',body]]);}
+    if(prone.length&&stand.length){const p=sumMisses(prone),s=sumMisses(stand),body=`Лёжа ${p} ${plural(p,'промах','промаха','промахов')}, стоя ${s}.`;
+      if(s-p>=2)v(2,'stand',[['Стойка забирает больше всего.',body],['Основные промахи — стоя.',body],['Стоя мишени уходили чаще.',body]]);
+      else if(p-s>=2)v(2,'prone',[['Лёжа промахов больше, чем стоя.',body],['Основные промахи — лёжа.',body],['Лёжа мишени уходили чаще.',body]]);}
+  }else{k(1,'Стрельба на этом этапе в протоколе не записана.','Видны только время и места.');notes.push('В протоколе этого этапа рубежи не выделены: отрезки идут так, как их записал хронометраж.');}
+  if(lapPct.length&&finPct!=null&&lapPct[0]<=25&&finPct-lapPct[0]>=15){const body='Места уходят на рубежах и штрафных кругах.';
+    v(3,'lost',[[`На первом круге — в первых ${lapPct[0]}%, на финише — ${finPct}%.`,body],[`Начали в первых ${lapPct[0]}% поля, финишировали в первых ${finPct}%.`,body],[`После первого круга — первые ${lapPct[0]}% поля, на финише — ${finPct}%.`,body]]);}
+  if(lapPct.length>=3){const a=lapPct[0],b=lapPct[lapPct.length-1],body=`Первый круг — в первых ${a}% поля, последний — ${b}%. В последние круги входят и штрафные.`;
+    if(b-a>=20)v(1,'fade',[['Последний круг заметно тяжелее первого.',body],['К концу гонки ход проседает.',body],['Финишный круг дался тяжелее стартового.',body]]);}
+
+  const cost=raceCost(race)??missCost(allRaces);
+  if(race.type==='Индивидуальная'&&race.hasFire)notes.push('В индивидуальной гонке штраф начисляется иначе, чем штрафным кругом, поэтому цену промаха здесь не считаем.');
+  if(race.result!=null&&race.hasFire&&race.type!=='Индивидуальная'){
+    try{
+      el('status').textContent='Сравниваю с соперниками…';
+      const field=await fieldTimes(race),cat=field.filter(x=>x.cat===race.catName).map(x=>x.t).sort((a,b)=>a-b);
+      if(cost&&misses>=2){
+        const minus=Math.min(3,misses),t=race.result-minus*cost,m=`${minus} ${plural(minus,'промах','промаха','промахов')}`;
+        const place=Math.max(1,race.pos-field.filter(x=>x.t>=t&&x.t<race.result).length);
+        const catPlace=race.catPos?Math.max(1,race.catPos-cat.filter(x=>x>=t&&x<race.result).length):null;
+        const body=`${catPlace&&catPlace<race.catPos?`В категории — ${catPlace}-е место вместо ${race.catPos}-го. `:''}Это оценка, а не результат: промах здесь стоил около ${cost} секунд.`;
+        if(place<race.pos)v(3,'whatif',[[`Минус ${m} — ${place}-е место вместо ${race.pos}-го.`,body],[`На ${m} меньше — и было бы ${place}-е место, а не ${race.pos}-е.`,body],[`${targetsWord(minus)} дали бы ${place}-е место вместо ${race.pos}-го.`,body]]);
+      }
+      const faster=cat.filter(x=>x<race.result);
+      if(race.catPos&&race.catPos>1&&faster.length){
+        const gap=Math.round(race.result-faster[faster.length-1]),n=Math.max(1,Math.ceil(gap/(cost||1))),pl=race.catPos-1;
+        const body=cost?`Это примерно ${targetsWord(n)}.`:'';
+        v(2,'gap',[[`До ${pl}-го места в категории — ${gap} с.`,body],[`${pl}-е место в категории было в ${gap} с от вас.`,body],[`От ${pl}-го места в категории вас отделили ${gap} с.`,body]]);
+      }
+      if(race.catPos&&race.catPos>3&&cat.length>=3){
+        const gap=Math.round(race.result-cat[2]),n=Math.ceil(gap/(cost||1));
+        const body=cost?`Около ${n} ${plural(n,'промаха','промахов','промахов')} при вашем ходе.`:'';
+        if(gap>0)v(1,'podium',[[`До призового места в категории — ${fmt(gap)}.`,body],[`Призовое место в категории — в ${fmt(gap)} от вас.`,body],[`До тройки в категории — ${fmt(gap)}.`,body]]);
+      }
+    }catch(e){}
+  }
+  const findings=out.sort((a,b)=>b.w-a.w).slice(0,5);
+  const segs=[];let lap=0,rng=0;
+  for(const r of race.order){if(r.fire){rng++;segs.push({kind:'r',label:`Рубеж ${rng} · ${r.fire.prone?'лёжа':'стоя'}`,time:r.time,pos:r.pos,misses:r.fire.misses});}else{lap++;segs.push({kind:'l',label:race.hasFire?`Круг ${lap}`:`Отрезок ${lap}`,time:r.time,pos:r.pos});}}
+  const shoot=race.ranges.map((f,i)=>({label:f.fire.prone?'Лёжа':'Стоя',misses:f.fire.misses,pos:f.pos,time:f.time}));
+  const lines=[`${race.type} · ${race.cat} · ${placeText(race)}${race.resultText?' · '+race.resultText:''}`,...segs.map(s=>`${s.label}: ${s.time!=null?fmt(s.time):'—'}${s.pos?`, ${s.pos}-е место`:''}${s.misses!=null?`, промахов ${s.misses}`:''}`)];
+  return {eyebrow:`${race.type} · ${race.cat}`,title:name,sub:`${dateRu(race.date)} · ${race.event}`,tiles,shoot,findings,lines,segs,race,notes,
+    file:translit(race.type).replace(/[^A-Za-z]/g,'')+'_'+race.date.slice(0,10)};
+}
+
+// --- AI text (optional) ---
+function aiPayload(v){return {kind:v.segs?'race':'overall',sub:v.sub,tiles:v.tiles,findings:v.findings.map(c=>{const f=splitFinding(c.t);return (f.head+' '+f.body).trim();}),lines:v.lines};}
+async function loadAiText(v){
+  const box=el('ai-text');if(!box)return;
+  try{
+    const r=await fetch(AI_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=UTF-8'},body:JSON.stringify(aiPayload(v))});
+    const d=await r.json();
+    if(state.view!==v)return;
+    if(!d.ok||!d.text){box.remove();return;}
+    v.aiText=d.text;
+    box.innerHTML=`<p>${esc(d.text)}</p><p class="note">Текст составлен AI по выводам ниже; числа проверены программой.</p>`;
+  }catch(e){if(state.view===v)box.remove();}
+}
+
+// --- render ---
+const targets=(misses,sm)=>`<span class="targets${sm?' sm':''}" aria-label="${5-misses} из 5">${Array.from({length:5},(_,i)=>`<i class="t${i>=5-misses?' m':''}"></i>`).join('')}</span>`;
+const rankBadge=(pos,of)=>pos&&of?`<span class="rank" style="background:var(--${{g:'good',m:'mid',w:'weak'}[level(pos,of)]})">${pos}</span>`:'';
+function scoreHtml(t){return t.length?`<div class="score">${t.map(([v,l])=>`<div><b>${esc(v)}</b><span>${esc(l)}</span></div>`).join('')}</div>`:'';}
+function shootHtml(v){
+  if(!v.shoot||!v.shoot.length)return '';
+  if(v.segs)return `<div class="shoot">${v.shoot.map(s=>`<span class="lbl">${s.label}</span>${targets(s.misses)}<span class="meta">${s.time!=null?fmt(s.time):'—'} · ${s.pos??'—'}-е</span>`).join('')}</div>`;
+  return `<div class="shoot">${v.shoot.map(s=>`<span class="lbl">${s.label}</span><div class="bar"><i style="width:${Math.round(100*s.hits/s.shots)}%"></i></div><span class="meta">${s.hits} из ${s.shots}</span>`).join('')}</div>`;
+}
+function stripHtml(v){
+  const segs=v.segs.filter(s=>s.time);if(!segs.length)return '';
+  return `<div class="strip" role="img" aria-label="Отрезки гонки">${segs.map(s=>`<div class="${s.kind==='r'?'r':'lvl-'+level(s.pos,v.race.of)}" style="flex:${Math.max(s.time,25)}" title="${esc(s.label)} · ${fmt(s.time)} · ${s.pos??'—'}-е"></div>`).join('')}</div>
+  <div class="legend"><span><i style="background:var(--good)"></i>первая четверть поля</span><span><i style="background:var(--mid)"></i>середина</span><span><i style="background:var(--weak)"></i>последние 40%</span><span><i class="r" style="background:var(--line)"></i>рубеж</span></div>`;
+}
+function segsHtml(v){
+  return `<div class="card"><h2>По отрезкам</h2>${stripHtml(v)}<ul class="segs">${v.segs.map(s=>`<li><span>${esc(s.label)}${s.misses!=null?' '+targets(s.misses,true):''}</span><span class="tm">${s.time!=null?fmt(s.time):'—'}</span>${rankBadge(s.pos,v.race.of)||'<span></span>'}</li>`).join('')}</ul></div>`;
+}
+function racesHtml(races){
+  const seasons={};
+  for(const r of races){const d=new Date(r.date);const y=d.getMonth()>=6?d.getFullYear():d.getFullYear()-1;(seasons[y]=seasons[y]||[]).push(r);}
+  return Object.keys(seasons).sort().reverse().map(y=>`<div class="card"><h2>Сезон ${y}–${String(+y+1).slice(2)}</h2><ul class="races">${seasons[y].sort(byDateDesc).map(r=>`<li><button type="button" data-race="${state.races.indexOf(r)}">
+      <span class="what">${esc(r.type)} · ${esc(r.cat)}</span><span class="place">${r.ok?`${r.pos}<span class="muted">/${r.of??'—'}</span>`:'—'}</span>
+      <span class="when">${dateRu(r.date)} · ${esc(r.event)}</span><span class="cat">${r.catPos?`${r.catPos}/${r.catOf??'—'} ${esc(r.catName||'')}`:''}</span>
+      <span class="tg">${r.hasFire?r.ranges.map(f=>targets(f.fire.misses,true)).join(''):'стрельба не записана'}</span></button></li>`).join('')}</ul></div>`).join('');
+}
+
+function showView(v){
+  state.view=v;
+  const finds=v.findings.length?`<ul class="finds">${v.findings.map(c=>{const f=splitFinding(c.t);return `<li><b>${esc(f.head)}</b><span>${esc(f.body)}</span></li>`;}).join('')}</ul>`:`<p class="muted">${esc(v.empty||'Выводов по этой гонке нет.')}</p>`;
+  const ai=AI_URL&&v.findings.length>=2?(v.aiText?`<div id="ai-text" class="ai"><p>${esc(v.aiText)}</p><p class="note">Текст составлен AI по выводам ниже; числа проверены программой.</p></div>`:'<div id="ai-text" class="ai"><p class="muted">Составляю разбор словами…</p></div>'):'';
+  el('view').innerHTML=`<div class="card"><p class="eyebrow">${esc(v.eyebrow)} · ${esc(v.sub)}</p>${scoreHtml(v.tiles)}${shootHtml(v)}${ai}${finds}
+    <div class="actions"><button id="image" type="button">Поделиться картинкой</button><button id="copy" type="button" class="secondary">Скопировать текст</button></div>
+    <details class="how"><summary>Как считали</summary>${v.notes.map(n=>`<p class="note">${esc(n)}</p>`).join('')}</details></div>`+(v.segs?segsHtml(v):racesHtml(state.races));
+  el('copy').onclick=()=>copyText(v);el('image').onclick=()=>exportImage(v);
+  if(AI_URL&&v.findings.length>=2&&!v.aiText)loadAiText(v);
+}
+
+function renderReport(name,races,cms){
+  state={name,races,cms};
+  const evs=[];for(const r of [...races].sort(byDateDesc))if(!evs.some(e=>e.id===r.eventId))evs.push({id:r.eventId,label:`${dateRu(r.date)} · ${r.event}`});
+  const best=races.filter(r=>r.catPos).sort((a,b)=>a.catPos/(a.catOf||1)-b.catPos/(b.catOf||1))[0];
+  el('report').innerHTML=`<div class="card"><p class="person">${esc(name)}</p><p class="person-sub">${races.length} ${plural(races.length,'гонка','гонки','гонок')} в протоколах${best?` · лучшее — ${best.catPos}-е из ${best.catOf??'—'} в категории (${best.type.toLowerCase()}, ${dateRu(best.date)})`:''}</p>
+    <div class="pick"><label>Этап<select id="pick-event"><option value="">Все гонки</option>${evs.map(e=>`<option value="${esc(e.id)}">${esc(e.label)}</option>`).join('')}</select></label><label>Гонка<select id="pick-race" disabled><option value="">—</option></select></label></div></div><div id="view"></div>`;
+  el('report').hidden=false;
+  el('pick-event').onchange=()=>{
+    const id=el('pick-event').value,sel=el('pick-race');
+    if(!id){sel.innerHTML='<option value="">—</option>';sel.disabled=true;showView(overallView(name,races,cms));return;}
+    const rs=races.map((r,i)=>({r,i})).filter(x=>x.r.eventId===id);
+    sel.innerHTML=rs.map(x=>`<option value="${x.i}">${esc(x.r.type)} · ${esc(x.r.cat)}</option>`).join('');sel.disabled=rs.length<2;
+    openRace(rs[0].i);
+  };
+  el('pick-race').onchange=()=>openRace(+el('pick-race').value);
+  el('report').onclick=e=>{const b=e.target.closest('button[data-race]');if(!b)return;const i=+b.dataset.race,r=races[i];el('pick-event').value=r.eventId;el('pick-event').onchange();el('pick-race').value=String(i);openRace(i);};
+  showView(overallView(name,races,cms));
+  el('report').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+let raceSerial=0;
+async function openRace(i){
+  const serial=++raceSerial;el('view').innerHTML='<div class="card muted">Считаю разбор гонки…</div>';
+  const v=await raceView(state.name,state.races[i],state.races);
+  el('status').textContent='';
+  if(serial!==raceSerial)return;
+  showView(v);
+  el('view').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function copyText(v){
+  const lines=[`${v.title} — ${v.eyebrow}`,v.sub,''];
+  if(v.aiText)lines.push(v.aiText);
+  else for(const c of v.findings){const f=splitFinding(c.t);lines.push('• '+(f.head+' '+f.body).trim());}
+  lines.push('',...v.lines,'','По протоколам results.pionercup.ru');
+  const text=lines.join('\n'),b=el('copy');
+  (navigator.clipboard?navigator.clipboard.writeText(text):Promise.reject()).then(()=>{b.textContent='Скопировано';setTimeout(()=>b.textContent='Скопировать текст',1500);}).catch(()=>{const ta=document.createElement('textarea');ta.value=text;document.body.append(ta);ta.select();try{document.execCommand('copy');b.textContent='Скопировано';}catch(e){}ta.remove();});
+}
+
+// --- image export ---
+function wrapLines(ctx,text,width){
+  const words=text.split(/\s+/),lines=[];let line='';
+  for(const w of words){const t=line?line+' '+w:w;if(ctx.measureText(t).width>width&&line){lines.push(line);line=w;}else line=t;}
+  if(line)lines.push(line);return lines;
+}
+function drawCard(v){
+  const W=1080,P=80,font='-apple-system,system-ui,"Segoe UI",Roboto,sans-serif';
+  const C={bg:'#0f1f2b',card:'#16293a',ink:'#ffffff',text:'#c9d6de',muted:'#7f95a3',hit:'#3fbf9c',miss:'#ef7a5f',line:'#24394b'};
+  const c=document.createElement('canvas'),ctx=c.getContext('2d');
+  const items=(v.aiText?[{head:'',body:v.aiText}]:v.findings.slice(0,3).map(x=>splitFinding(x.t)));
+  const plan=[];let y=P;
+  const text=(kind,str,size,weight,color,gap)=>{if(!str)return;ctx.font=`${weight} ${size}px ${font}`;const ls=wrapLines(ctx,str,W-2*P);plan.push({kind:'text',ls,size,weight,color,y});y+=ls.length*size*1.28+gap;};
+  text('eyebrow',(v.eyebrow+' · '+v.sub).toUpperCase(),24,'700',C.hit,18);
+  text('title',v.title,64,'800',C.ink,30);
+  const scoreY=y;if(v.tiles.length)y+=150;
+  const shootY=y;const shootRows=v.shoot?v.shoot.length:0;if(shootRows)y+=shootRows*58+30;
+  for(const it of items){text('head',it.head,36,'700',C.ink,10);text('body',it.body,29,'400',C.text,34);}
+  const footY=y+10;
+  c.width=W;c.height=Math.max(footY+P,1080);
+  ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,c.height);
+  // target motif in the corner
+  for(let i=0;i<5;i++){ctx.beginPath();ctx.arc(W-P-i*46-18,P+16,16,0,Math.PI*2);ctx.fillStyle=i<3?C.hit:'transparent';ctx.fill();ctx.lineWidth=3;ctx.strokeStyle=i<3?C.hit:C.miss;ctx.stroke();}
+  ctx.textBaseline='top';
+  for(const b of plan){ctx.font=`${b.weight} ${b.size}px ${font}`;ctx.fillStyle=b.color;b.ls.forEach((l,i)=>ctx.fillText(l,P,b.y+i*b.size*1.28));}
+  if(v.tiles.length){
+    const n=v.tiles.length,bw=(W-2*P)/n;
+    ctx.strokeStyle=C.line;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(P,scoreY);ctx.lineTo(W-P,scoreY);ctx.moveTo(P,scoreY+128);ctx.lineTo(W-P,scoreY+128);ctx.stroke();
+    v.tiles.forEach(([val,l],i)=>{const x=P+i*bw+(i?24:0);
+      if(i){ctx.beginPath();ctx.moveTo(P+i*bw,scoreY+18);ctx.lineTo(P+i*bw,scoreY+110);ctx.stroke();}
+      ctx.fillStyle=C.ink;ctx.font=`800 ${n>3?46:54}px ${font}`;ctx.fillText(val,x,scoreY+22);
+      ctx.fillStyle=C.muted;ctx.font=`400 22px ${font}`;wrapLines(ctx,l,bw-30).slice(0,1).forEach(t=>ctx.fillText(t,x,scoreY+84));});
+  }
+  if(shootRows){
+    v.shoot.forEach((s,i)=>{const yy=shootY+i*58;ctx.fillStyle=C.ink;ctx.font=`600 28px ${font}`;ctx.fillText(s.label,P,yy+6);
+      if(v.segs){for(let k=0;k<5;k++){const miss=k>=5-s.misses;ctx.beginPath();ctx.arc(P+150+k*52,yy+22,18,0,Math.PI*2);ctx.lineWidth=4;if(miss){ctx.strokeStyle=C.miss;ctx.stroke();}else{ctx.fillStyle=C.hit;ctx.fill();}}}
+      else{const bx=P+150,bw=W-2*P-150-150;ctx.fillStyle=C.line;ctx.fillRect(bx,yy+14,bw,16);ctx.fillStyle=C.hit;ctx.fillRect(bx,yy+14,bw*s.hits/s.shots,16);ctx.fillStyle=C.text;ctx.font=`400 26px ${font}`;ctx.fillText(`${s.hits} из ${s.shots}`,bx+bw+20,yy+6);}});
+  }
+  ctx.fillStyle=C.muted;ctx.font=`400 22px ${font}`;ctx.fillText('Разбор по протоколам results.pionercup.ru',P,footY);
+  return c;
+}
+async function exportImage(v){
+  const btn=el('image');btn.disabled=true;
+  try{
+    const blob=await new Promise(r=>drawCard(v).toBlob(r,'image/png'));
+    const file=new File([blob],`razbor_${translit(v.title.split(' ')[0])}_${v.file}.png`,{type:'image/png'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:'Разбор гонки'});}
+    else{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=file.name;document.body.append(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);}
+  }catch(e){if(e&&e.name!=='AbortError')el('status').textContent='Не удалось сохранить картинку: откройте приложение в браузере.';}
+  finally{btn.disabled=false;}
+}
+
+// --- flow ---
+el('search-form').onsubmit=async e=>{
+  e.preventDefault();const q=el('q').value.trim();if(q.length<2)return;
+  el('go').disabled=true;el('report').hidden=true;el('names').hidden=true;el('names-actions').hidden=true;el('status').classList.remove('err');
+  try{
+    el('status').textContent='Загружаю список этапов…';
+    found=await search(q);
+    if(!found.length){el('status').textContent='В протоколах никого не нашлось. Проверьте написание; в протоколах бывает и латиница.';return;}
+    const groups={};for(const p of found){const k=normName(p.fullName);(groups[k]=groups[k]||{name:p.fullName,list:[]}).list.push(p);}
+    const keys=Object.keys(groups);
+    el('names').innerHTML=`<p class="muted">Найдено в протоколах. Отметьте, что это вы${keys.length>1?' (однофамильцев снимите)':''}:</p>`+keys.map(k=>`<label><input type="checkbox" value="${esc(k)}" checked> ${esc(groups[k].name)} <span class="muted">· ${groups[k].list.length} ${plural(groups[k].list.length,'гонка','гонки','гонок')}</span></label>`).join('');
+    el('names').hidden=false;el('names-actions').hidden=false;el('status').textContent='';
+    el('build').onclick=()=>build(keys.filter(k=>el('names').querySelector(`input[value="${CSS.escape(k)}"]`).checked).flatMap(k=>groups[k].list),groups);
+    if(keys.length===1)build(groups[keys[0]].list,groups);
+  }catch(err){el('status').textContent='Сервис протоколов не ответил. Попробуйте ещё раз через минуту.';el('status').classList.add('err');}
+  finally{el('go').disabled=false;}
+};
+
+async function build(hits,groups){
+  if(!hits.length)return;
+  el('build').disabled=true;
+  try{
+    const races=(await loadProfiles(hits)).filter(r=>r.ok||r.hasFire);
+    if(!races.length){el('status').textContent='Личных результатов не нашлось (возможно, только командные гонки).';return;}
+    el('status').textContent='Считаю выводы…';
+    let wi=null;try{wi=await whatIf(races);}catch(e){}
+    const name=hits[0].fullName.split(' ').map(w=>w.charAt(0).toUpperCase()+w.slice(1).toLowerCase()).join(' ');
+    renderReport(name,races,comments(races,wi));
+    el('names').hidden=true;el('names-actions').hidden=true;
+    el('status').textContent='';
+  }catch(err){el('status').textContent='Не удалось загрузить гонки. Попробуйте ещё раз.';el('status').classList.add('err');}
+  finally{el('build').disabled=false;}
+}
+</script>
+</body>
+</html>
