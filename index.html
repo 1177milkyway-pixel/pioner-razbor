@@ -106,6 +106,14 @@ const API='https://results.pionercup.ru/api';
 // Function address for AI text (off: the model still mixes up meaning). On: 'https://functions.yandexcloud.net/d4eiuknd9i2hm25s30iq'
 const AI_URL_DEFAULT='';
 const AI_URL=new URLSearchParams(location.search).get('ai')||AI_URL_DEFAULT;
+// Yandex Metrika counter number; 0 — statistics are off. Only anonymous visits and goals are sent, never surnames.
+const METRIKA_ID=0;
+if(METRIKA_ID){
+  (function(m,e,t,r,i,k,a){m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};m[i].l=1*new Date();k=e.createElement(t);a=e.getElementsByTagName(t)[0];k.async=1;k.src=r;a.parentNode.insertBefore(k,a);})(window,document,'script','https://mc.yandex.ru/metrika/tag.js','ym');
+  ym(METRIKA_ID,'init',{clickmap:false,trackLinks:true,accurateTrackBounce:true,webvisor:false});
+}
+// Goals: search, report, race, share_image, copy_text. Parameters never contain names.
+const track=(goal,params)=>{try{if(METRIKA_ID&&window.ym)ym(METRIKA_ID,'reachGoal',goal,params||{});}catch(e){}};
 const tg=window.Telegram&&window.Telegram.WebApp;
 if(tg&&tg.initData!==undefined){try{tg.ready();tg.expand();document.documentElement.dataset.theme=tg.colorScheme==='dark'?'dark':'light';}catch(e){}}
 
@@ -369,6 +377,7 @@ const placeText=r=>r.ok?`${r.pos} из ${r.of??'—'}${r.catPos?`, в катег
 const sumMisses=a=>a.reduce((n,f)=>n+f.fire.misses,0);
 const level=(pos,of)=>!pos||!of?'m':pos/of<=.25?'g':pos/of<=.6?'m':'w';
 function splitFinding(t){const d=document.createElement('div');d.innerHTML=t;const head=d.querySelector('.k')?.textContent||'';return {head,body:d.textContent.slice(head.length).trim()};}
+const METRIKA_NOTE='Приложение собирает обезличенную статистику посещений через Яндекс Метрику; фамилии и результаты в неё не передаются.';
 const METHOD='Места на отрезках — среди всех участников гонки. Цена промаха в гонке — медиана по всем её участникам с двумя и более промахами: на сколько круги после рубежей дольше первого в расчёте на один промах; в неё попадает и усталость. Сравнение с категорией — по участникам вашей возрастной группы в тех же гонках, по медиане; ход — по первому кругу, где ещё нет штрафных; время рубежа — без штрафных кругов. Источник — протоколы results.pionercup.ru.';
 
 function overallView(name,races,cms){
@@ -385,7 +394,7 @@ function overallView(name,races,cms){
   const lines=[...races].sort(byDateDesc).map(r=>`${dateRu(r.date)} ${r.type} (${r.cat}): ${placeText(r)}${r.hasFire?' · промахи '+r.ranges.map(f=>f.fire.misses).join('-'):''}`);
   const seasons=new Set(races.map(r=>{const d=new Date(r.date);return d.getMonth()>=6?d.getFullYear():d.getFullYear()-1;})).size;
   return {eyebrow:'Все гонки',title:name,sub:`${races.length} ${plural(races.length,'гонка','гонки','гонок')} · ${seasons} ${plural(seasons,'сезон','сезона','сезонов')} · стрельба записана в ${fireRaces.length}`,
-    tiles,shoot,findings:cms,lines,file:'vse_gonki',notes:[METHOD,'Стрельба по рубежам записана в протоколах с января 2026 года; в более ранних гонках видны только время и места.'],
+    tiles,shoot,findings:cms,lines,file:'vse_gonki',notes:[METHOD,...(METRIKA_ID?[METRIKA_NOTE]:[]),'Стрельба по рубежам записана в протоколах с января 2026 года; в более ранних гонках видны только время и места.'],
     empty:'Для выводов о стрельбе мало гонок с записанными промахами.'};
 }
 
@@ -571,21 +580,22 @@ function showView(v){
 }
 
 function renderReport(name,races,cms){
-  state={name,races,cms};
+  state={name,races,cms};track('report',{races:races.length,telegram:!!(tg&&tg.initData)});
   const evs=[];for(const r of [...races].sort(byDateDesc))if(!evs.some(e=>e.id===r.eventId))evs.push({id:r.eventId,label:`${dateRu(r.date)} · ${r.event}`});
   const best=races.filter(r=>r.catPos).sort((a,b)=>a.catPos/(a.catOf||1)-b.catPos/(b.catOf||1))[0];
   el('report').innerHTML=`<div class="card"><p class="person">${esc(name)}</p><p class="person-sub">${races.length} ${plural(races.length,'гонка','гонки','гонок')} в протоколах${best?` · лучшее — ${best.catPos}-е из ${best.catOf??'—'} в категории (${best.type.toLowerCase()}, ${dateRu(best.date)})`:''}</p>
     <div class="pick"><label>Этап<select id="pick-event"><option value="">Все гонки</option>${evs.map(e=>`<option value="${esc(e.id)}">${esc(e.label)}</option>`).join('')}</select></label><label>Гонка<select id="pick-race" disabled><option value="">—</option></select></label></div></div><div id="view"></div>`;
   el('report').hidden=false;
+  // Fill the race list of a stage without opening anything; returns the races of that stage.
+  const fillRaces=id=>{const sel=el('pick-race'),rs=races.map((r,i)=>({r,i})).filter(x=>x.r.eventId===id);
+    sel.innerHTML=rs.map(x=>`<option value="${x.i}">${esc(x.r.type)} · ${esc(x.r.cat)}</option>`).join('');sel.disabled=rs.length<2;return rs;};
   el('pick-event').onchange=()=>{
     const id=el('pick-event').value,sel=el('pick-race');
     if(!id){sel.innerHTML='<option value="">—</option>';sel.disabled=true;showView(overallView(name,races,cms));return;}
-    const rs=races.map((r,i)=>({r,i})).filter(x=>x.r.eventId===id);
-    sel.innerHTML=rs.map(x=>`<option value="${x.i}">${esc(x.r.type)} · ${esc(x.r.cat)}</option>`).join('');sel.disabled=rs.length<2;
-    openRace(rs[0].i);
+    openRace(fillRaces(id)[0].i);
   };
   el('pick-race').onchange=()=>openRace(+el('pick-race').value);
-  el('report').onclick=e=>{const b=e.target.closest('button[data-race]');if(!b)return;const i=+b.dataset.race,r=races[i];el('pick-event').value=r.eventId;el('pick-event').onchange();el('pick-race').value=String(i);openRace(i);};
+  el('report').onclick=e=>{const b=e.target.closest('button[data-race]');if(!b)return;const i=+b.dataset.race,r=races[i];el('pick-event').value=r.eventId;fillRaces(r.eventId);el('pick-race').value=String(i);openRace(i);};
   showView(overallView(name,races,cms));
   el('report').scrollIntoView({behavior:'smooth',block:'start'});
 }
@@ -593,7 +603,7 @@ function renderReport(name,races,cms){
 let raceSerial=0;
 async function openRace(i){
   const serial=++raceSerial;el('view').innerHTML='<div class="card muted">Считаю разбор гонки…</div>';
-  const v=await raceView(state.name,state.races[i],state.races);
+  const v=await raceView(state.name,state.races[i],state.races);track('race',{type:state.races[i].type,cat:state.races[i].cat});
   el('status').textContent='';
   if(serial!==raceSerial)return;
   showView(v);
@@ -601,6 +611,7 @@ async function openRace(i){
 }
 
 function copyText(v){
+  track('copy_text');
   const lines=[`${v.title} — ${v.eyebrow}`,v.sub,''];
   if(v.aiText)lines.push(v.aiText);
   else for(const c of v.findings){const f=splitFinding(c.t);lines.push('• '+(f.head+' '+f.body).trim());}
@@ -651,6 +662,7 @@ function drawCard(v){
   return c;
 }
 async function exportImage(v){
+  track('share_image');
   const btn=el('image');btn.disabled=true;
   try{
     const blob=await new Promise(r=>drawCard(v).toBlob(r,'image/png'));
@@ -663,7 +675,7 @@ async function exportImage(v){
 
 // --- flow ---
 el('search-form').onsubmit=async e=>{
-  e.preventDefault();const q=el('q').value.trim();if(q.length<2)return;
+  e.preventDefault();const q=el('q').value.trim();if(q.length<2)return;track('search');
   el('go').disabled=true;el('report').hidden=true;el('names').hidden=true;el('names-actions').hidden=true;el('status').classList.remove('err');
   try{
     el('status').textContent='Загружаю список этапов…';
