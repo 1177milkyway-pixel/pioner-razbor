@@ -6,9 +6,9 @@
 <title>Разбор гонок Pioner Cup</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
-:root{--bg:#eef2f4;--card:#fff;--ink:#0f1f2b;--text:#1b2b36;--muted:#5f707b;--line:#dde4e8;--accent:#0e7a63;--accent-text:#fff;--hit:#0e7a63;--miss:#c9462c;--good:#0e7a63;--mid:#c99a2e;--weak:#c9462c;--soft:#f5f8f9;--warn:#a2512b}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0d1419;--card:#152029;--ink:#eef4f7;--text:#dbe5ea;--muted:#91a3ad;--line:#26343e;--accent:#3fbf9c;--accent-text:#06221b;--hit:#3fbf9c;--miss:#ef7a5f;--good:#3fbf9c;--mid:#e0b552;--weak:#ef7a5f;--soft:#1b2832;--warn:#ef9a74}}
-:root[data-theme="dark"]{--bg:#0d1419;--card:#152029;--ink:#eef4f7;--text:#dbe5ea;--muted:#91a3ad;--line:#26343e;--accent:#3fbf9c;--accent-text:#06221b;--hit:#3fbf9c;--miss:#ef7a5f;--good:#3fbf9c;--mid:#e0b552;--weak:#ef7a5f;--soft:#1b2832;--warn:#ef9a74}
+:root{--bg:#f2f3fa;--card:#fff;--ink:#15154f;--text:#23234a;--muted:#5d6088;--line:#dfe1f0;--accent:#0042fe;--accent-text:#fff;--hit:#0042fe;--miss:#e8541f;--good:#0042fe;--mid:#7b7fa3;--weak:#e8541f;--soft:#f5f6fc;--warn:#c2410c}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0d0d36;--card:#16165a;--ink:#ffffff;--text:#dcdcf5;--muted:#9d9fd6;--line:#29297a;--accent:#e1ff00;--accent-text:#15154f;--hit:#e1ff00;--miss:#ff6a3d;--good:#4f6bff;--mid:#6e7199;--weak:#ff6a3d;--soft:#1c1c66;--warn:#ff9a74}}
+:root[data-theme="dark"]{--bg:#0d0d36;--card:#16165a;--ink:#ffffff;--text:#dcdcf5;--muted:#9d9fd6;--line:#29297a;--accent:#e1ff00;--accent-text:#15154f;--hit:#e1ff00;--miss:#ff6a3d;--good:#4f6bff;--mid:#6e7199;--weak:#ff6a3d;--soft:#1c1c66;--warn:#ff9a74}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
@@ -115,7 +115,7 @@ if(METRIKA_ID){
 // Goals: search, report, race, share_image, copy_text. Parameters never contain names.
 const track=(goal,params)=>{try{if(METRIKA_ID&&window.ym)ym(METRIKA_ID,'reachGoal',goal,params||{});}catch(e){}};
 const tg=window.Telegram&&window.Telegram.WebApp;
-if(tg&&tg.initData!==undefined){try{tg.ready();tg.expand();document.documentElement.dataset.theme=tg.colorScheme==='dark'?'dark':'light';}catch(e){}}
+if(tg&&tg.platform&&tg.platform!=='unknown'){try{tg.ready();tg.expand();document.documentElement.dataset.theme=tg.colorScheme==='dark'?'dark':'light';}catch(e){}}
 
 const el=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -645,7 +645,7 @@ function wrapLines(ctx,text,width){
 }
 function drawCard(v){
   const W=1080,P=80,font='-apple-system,system-ui,"Segoe UI",Roboto,sans-serif';
-  const C={bg:'#0f1f2b',card:'#16293a',ink:'#ffffff',text:'#c9d6de',muted:'#7f95a3',hit:'#3fbf9c',miss:'#ef7a5f',line:'#24394b'};
+  const C={bg:'#1e1e80',card:'#26269a',panel:'#26269a',ink:'#ffffff',text:'#dcdcf5',muted:'#a3a6e0',hit:'#e1ff00',miss:'#ff6a3d',line:'#3434a0',bar:'#30309e',gold:'#e1ff00',blue:'#7d93ff'};
   const c=document.createElement('canvas'),ctx=c.getContext('2d');
   const items=(v.aiText?[{head:'',body:v.aiText}]:v.findings.slice(0,3).map(x=>splitFinding(x.t)));
   const plan=[];let y=P;
