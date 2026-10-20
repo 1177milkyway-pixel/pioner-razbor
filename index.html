@@ -108,12 +108,15 @@ const AI_URL_DEFAULT='';
 const AI_URL=new URLSearchParams(location.search).get('ai')||AI_URL_DEFAULT;
 // Yandex Metrika counter number; 0 — statistics are off. Only anonymous visits and goals are sent, never surnames.
 const METRIKA_ID=113655907;
+// Where the visit came from: the Telegram link's ?startapp=… (e.g. e1 for a post after stage 1), or ?src=… on the web page.
+const SRC=(()=>{let s='';try{s=(window.Telegram&&Telegram.WebApp&&Telegram.WebApp.initDataUnsafe&&Telegram.WebApp.initDataUnsafe.start_param)||new URLSearchParams(location.search).get('src')||'';}catch(e){}
+  return /^[A-Za-z0-9_-]{1,64}$/.test(s)?s:'none';})();
 if(METRIKA_ID){
   (function(m,e,t,r,i,k,a){m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};m[i].l=1*new Date();k=e.createElement(t);a=e.getElementsByTagName(t)[0];k.async=1;k.src=r;a.parentNode.insertBefore(k,a);})(window,document,'script','https://mc.yandex.ru/metrika/tag.js','ym');
-  ym(METRIKA_ID,'init',{clickmap:false,trackLinks:true,accurateTrackBounce:true,webvisor:false});
+  ym(METRIKA_ID,'init',{clickmap:false,trackLinks:true,accurateTrackBounce:true,webvisor:false,params:{src:SRC}});
 }
 // Goals: search, report, race, share_image, copy_text. Parameters never contain names.
-const track=(goal,params)=>{try{if(METRIKA_ID&&window.ym)ym(METRIKA_ID,'reachGoal',goal,params||{});}catch(e){}};
+const track=(goal,params)=>{try{if(METRIKA_ID&&window.ym)ym(METRIKA_ID,'reachGoal',goal,{src:SRC,...(params||{})});}catch(e){}};
 const tg=window.Telegram&&window.Telegram.WebApp;
 if(tg&&tg.platform&&tg.platform!=='unknown'){try{tg.ready();tg.expand();document.documentElement.dataset.theme=tg.colorScheme==='dark'?'dark':'light';}catch(e){}}
 
@@ -632,7 +635,7 @@ function copyText(v){
   const lines=[`${v.title} — ${v.eyebrow}`,v.sub,''];
   if(v.aiText)lines.push(v.aiText);
   else for(const c of v.findings){const f=splitFinding(c.t);lines.push('• '+(f.head+' '+f.body).trim());}
-  lines.push('',...v.lines,'','По протоколам results.pionercup.ru');
+  lines.push('',...v.lines,'','По протоколам results.pionercup.ru','Разбор своей гонки — t.me/finishum_bot/razbor?startapp=share');
   const text=lines.join('\n'),b=el('copy');
   (navigator.clipboard?navigator.clipboard.writeText(text):Promise.reject()).then(()=>{b.textContent='Скопировано';setTimeout(()=>b.textContent='Скопировать текст',1500);}).catch(()=>{const ta=document.createElement('textarea');ta.value=text;document.body.append(ta);ta.select();try{document.execCommand('copy');b.textContent='Скопировано';}catch(e){}ta.remove();});
 }
@@ -656,7 +659,7 @@ function drawCard(v){
   const shootY=y;const shootRows=v.shoot?v.shoot.length:0;if(shootRows)y+=shootRows*58+30;
   for(const it of items){text('head',it.head,36,'700',C.ink,10);text('body',it.body,29,'400',C.text,34);}
   const footY=y+10;
-  c.width=W;c.height=Math.max(footY+P,640);
+  c.width=W;c.height=Math.max(footY+36+P,640);
   ctx.fillStyle=C.bg;ctx.fillRect(0,0,W,c.height);
   // target motif in the corner
   for(let i=0;i<5;i++){ctx.beginPath();ctx.arc(W-P-212+i*46,P+16,16,0,Math.PI*2);ctx.fillStyle=i<3?C.hit:'transparent';ctx.fill();ctx.lineWidth=3;ctx.strokeStyle=i<3?C.hit:C.miss;ctx.stroke();}
@@ -676,6 +679,8 @@ function drawCard(v){
       else{const bx=P+150,bw=W-2*P-150-150;ctx.fillStyle=C.line;ctx.fillRect(bx,yy+14,bw,16);ctx.fillStyle=C.hit;ctx.fillRect(bx,yy+14,bw*s.hits/s.shots,16);ctx.fillStyle=C.text;ctx.font=`400 26px ${font}`;ctx.fillText(`${s.hits} из ${s.shots}`,bx+bw+20,yy+6);}});
   }
   ctx.fillStyle=C.muted;ctx.font=`400 22px ${font}`;ctx.fillText('Разбор по протоколам results.pionercup.ru',P,footY);
+  // whoever sees a shared card can find the app
+  ctx.fillStyle=C.text;ctx.font=`600 24px ${font}`;ctx.fillText('Разбор своей гонки — @finishum_bot',P,footY+34);
   return c;
 }
 async function exportImage(v){
@@ -708,19 +713,20 @@ el('search-form').onsubmit=async e=>{
     }
     const keys=Object.keys(groups).sort((x,y)=>(groups[x].twin?1:0)-(groups[y].twin?1:0)||normName(groups[x].name).localeCompare(normName(groups[y].name))),twins=keys.some(k=>groups[k].twin);
     const row=k=>{const g=groups[k];return g.twin?`<label><input type="checkbox" value="${esc(k)}"> ${esc(g.label)}</label>`
-      :`<label><input type="checkbox" value="${esc(k)}" checked> ${esc(title(g.name))} <span class="muted">· ${g.list.length} ${plural(g.list.length,'гонка','гонки','гонок')}</span></label>`;};
+      :`<label><input type="checkbox" value="${esc(k)}"${k===normName(q)?' checked':''}> ${esc(title(g.name))} <span class="muted">· ${g.list.length} ${plural(g.list.length,'гонка','гонки','гонок')}</span></label>`;};
     const plain=keys.filter(k=>!groups[k].twin),twinNames=[...new Set(keys.filter(k=>groups[k].twin).map(k=>groups[k].twin))];
-    el('names').innerHTML=(plain.length?`<p class="muted">Отметьте себя${plain.length>1?', однофамильцев снимите':''}:</p>`+plain.map(row).join(''):'')
+    // one person found: no list, the report builds at once
+    if(keys.length===1&&!twins){el('status').textContent=`Нашёл: ${title(groups[keys[0]].name)} · ${groups[keys[0]].list.length} ${plural(groups[keys[0]].list.length,'гонка','гонки','гонок')}`;build(groups[keys[0]].list,groups);return;}
+    el('names').innerHTML=(plain.length?`<p class="muted">Найдено несколько участников. Отметьте себя:</p>`+plain.map(row).join(''):'')
       +twinNames.map(t=>{const ks=keys.filter(k=>groups[k].twin===t);return `<p class="muted">${esc(title(groups[ks[0]].name))} — таких участников несколько. Отметьте свои гонки:</p>`+ks.map(row).join('');}).join('');
     el('names').hidden=false;el('names-actions').hidden=false;el('status').textContent='';
     el('build').onclick=()=>build(keys.filter(k=>el('names').querySelector(`input[value="${CSS.escape(k)}"]`).checked).flatMap(k=>groups[k].list),groups);
-    if(keys.length===1&&!twins)build(groups[keys[0]].list,groups);
   }catch(err){el('status').textContent='Сервис протоколов не ответил. Попробуйте ещё раз через минуту.';el('status').classList.add('err');}
   finally{el('go').disabled=false;}
 };
 
 async function build(hits,groups){
-  if(!hits.length)return;
+  if(!hits.length){el('status').textContent='Отметьте себя в списке.';return;}
   el('build').disabled=true;
   try{
     const races=(await loadProfiles(hits)).filter(r=>r.ok||r.hasFire);
