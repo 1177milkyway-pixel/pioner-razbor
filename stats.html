@@ -1,0 +1,200 @@
+<!doctype html>
+<!--
+  © 2026 Сергей Ляшко, проект «Финишум». Все права защищены.
+  Код, методика расчётов и оформление — собственность автора.
+  Копирование, изменение и использование без письменного разрешения автора запрещены.
+-->
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Статистика сезона</title>
+<style>
+:root{--bg:#f2f3fa;--card:#fff;--ink:#15154f;--text:#23234a;--muted:#5d6088;--line:#dfe1f0;--accent:#0042fe;--accent-text:#fff;--hit:#0042fe;--miss:#e8541f;--soft:#f5f6fc;--warn:#c2410c}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0d0d36;--card:#16165a;--ink:#ffffff;--text:#dcdcf5;--muted:#9d9fd6;--line:#29297a;--accent:#e1ff00;--accent-text:#15154f;--hit:#e1ff00;--miss:#ff6a3d;--soft:#1c1c66;--warn:#ff9a74}}
+:root[data-theme="dark"]{--bg:#0d0d36;--card:#16165a;--ink:#ffffff;--text:#dcdcf5;--muted:#9d9fd6;--line:#29297a;--accent:#e1ff00;--accent-text:#15154f;--hit:#e1ff00;--miss:#ff6a3d;--soft:#1c1c66;--warn:#ff9a74}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+main{max-width:980px;margin:0 auto;padding:20px 16px 40px}
+.embedded main{padding-top:8px}
+.brand{display:flex;align-items:center;gap:10px;margin:0 0 4px}
+h1{font-size:24px;line-height:1.2;margin:0;color:var(--ink)}
+.sub{color:var(--muted);font-size:14px;margin:6px 0 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin:0 0 14px}
+.filters{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:end}
+.filters label{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{font:inherit;font-size:14px;border:0;padding:8px 12px;background:var(--soft);color:var(--text);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-text);font-weight:600}
+select,input[type=search]{font:inherit;font-size:15px;color:var(--text);background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+input[type=search]{min-width:200px}
+.status{color:var(--muted);font-size:14px;margin:10px 0 0;min-height:1.4em}
+.wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:15px;font-variant-numeric:tabular-nums}
+th{font-size:12px;font-weight:600;color:var(--muted);text-align:right;padding:8px 8px;border-bottom:1px solid var(--line);white-space:nowrap;cursor:pointer;user-select:none}
+th:first-child,td:first-child{text-align:left}
+th[aria-sort] span::after{content:" ↓"}
+th[aria-sort="ascending"] span::after{content:" ↑"}
+td{padding:9px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+td.n{white-space:normal}
+td.n b{display:block;color:var(--ink);font-weight:600}
+td.n small{color:var(--muted);font-size:12px}
+td small{color:var(--muted);font-size:11px;display:block}
+tr:hover td{background:var(--soft)}
+a.go{display:inline-block;font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;white-space:nowrap}
+.cta{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.cta p{margin:0;font-size:15px}
+.btn{display:inline-block;font-weight:600;border-radius:12px;padding:11px 16px;background:var(--accent);color:var(--accent-text);text-decoration:none}
+.note{color:var(--muted);font-size:13px;margin:8px 0 0;line-height:1.45}
+details summary{cursor:pointer;color:var(--muted);font-size:13px}
+.short{display:none}
+@media(max-width:620px){.hide-m{display:none}.short{display:inline}.long{display:none}main{padding:14px 12px 32px}.card{padding:12px}td,th{padding:8px 4px}table{font-size:13px}td.n{max-width:118px}td.n b{font-size:14px}}
+</style>
+</head>
+<body>
+<main>
+  <header id="head">
+    <div class="brand"><svg width="50" height="12" viewBox="0 0 50 12" aria-hidden="true"><g fill="var(--hit)"><circle cx="5" cy="6" r="4.5"/><circle cx="15" cy="6" r="4.5"/><circle cx="25" cy="6" r="4.5"/><circle cx="35" cy="6" r="4.5"/></g><g fill="none" stroke="var(--miss)" stroke-width="1.6"><circle cx="45" cy="6" r="3.7"/></g></svg><h1>Статистика сезона</h1></div>
+    <p class="sub">Pioner Cup · по официальным протоколам, обновляется после каждого этапа.</p>
+  </header>
+
+  <section class="card">
+    <div class="filters">
+      <label>Категория<span class="seg" id="f-cat"><button type="button" data-v="Основная" aria-pressed="true">Основная</button><button type="button" data-v="Мастера" aria-pressed="false">Мастера</button></span></label>
+      <label>Пол<span class="seg" id="f-sex"><button type="button" data-v="0" aria-pressed="true">М</button><button type="button" data-v="1" aria-pressed="false">Ж</button></span></label>
+      <label>Сезон<select id="f-year"></select></label>
+      <label>Поиск<input id="f-q" type="search" placeholder="Фамилия" autocomplete="off"></label>
+    </div>
+    <div id="status" class="status" role="status"></div>
+  </section>
+
+  <section class="card" id="table-card" hidden>
+    <div class="wrap"><table>
+      <thead><tr>
+        <th data-k="name" scope="col"><span>Участник</span></th>
+        <th data-k="rt" scope="col" title="Среднее время на огневом рубеже"><span>Рубеж</span></th>
+        <th data-k="speed" scope="col" title="Дистанция, делённая на чистое время хода, км/ч"><span><b class="long" style="font-weight:600">Ход, км/ч</b><b class="short" style="font-weight:600">Ход</b></span></th>
+        <th data-k="prone" scope="col"><span>Лёжа</span></th>
+        <th data-k="stand" scope="col"><span>Стоя</span></th>
+        <th scope="col" class="hide-m"></th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table></div>
+    <details><summary>Как считали</summary>
+      <p class="note">Рубеж — среднее время на огневом рубеже за сезон, по протоколу с точностью до десятых секунды. На этапах, где рубежи в протоколе не размечены, это отрезок рубежа вместе со штрафными кругами.</p>
+      <p class="note">Ход — скорость на кругах без рубежей и без штрафных кругов: длина кругов по данным хронометража, делённая на время их прохождения. Считается по всему сезону сразу, с учётом длины каждого круга.</p>
+      <p class="note">Лёжа и стоя — доля попаданий; при наведении видно число попаданий из числа выстрелов. До 2026 года промахи посчитаны по штрафным кругам. Гонки BiathLaw, эстафеты и детские гонки в статистику не входят.</p>
+    </details>
+  </section>
+
+  <section class="card cta">
+    <p>Подробный разбор каждой гонки — место в категории, стрельба, цена промаха, сравнение с соперниками — бесплатно в Telegram.</p>
+    <a class="btn" id="cta" href="https://t.me/finishum_bot/razbor?startapp=site" target="_blank" rel="noopener">Открыть разбор</a>
+  </section>
+  <p class="note copy" style="text-align:center">© 2026 Финишум</p>
+</main>
+
+<script>
+'use strict';
+const API='https://results.pionercup.ru/api';
+const APP='https://t.me/finishum_bot/razbor';
+const el=id=>document.getElementById(id);
+const post=async(path,body)=>{const r=await fetch(API+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok)throw new Error('HTTP '+r.status);return r.json();};
+const secs=t=>{if(!t||typeof t!=='string')return null;const p=t.split(':').map(Number);if(p.some(isNaN))return null;return p.length===3?p[0]*3600+p[1]*60+p[2]:p.length===2?p[0]*60+p[1]:null;};
+const normName=s=>s.trim().replace(/\s+/g,' ').toLowerCase();
+const title=s=>normName(s).replace(/(^|[\s-])\S/g,c=>c.toUpperCase());
+const plural=(n,a,b,c)=>{n=Math.abs(n)%100;const n1=n%10;if(n>10&&n<20)return c;if(n1>1&&n1<5)return b;if(n1===1)return a;return c;};
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function pool(items,limit,fn){const out=new Array(items.length);let i=0;await Promise.all(Array.from({length:Math.min(limit,items.length)},async()=>{while(i<items.length){const k=i++;try{out[k]=await fn(items[k]);}catch(e){out[k]=null;}}}));return out;}
+
+// Inside a frame on someone's site: no own header, the host page has its own.
+const EMBED=window.self!==window.top;if(EMBED){document.body.classList.add('embedded');el('head').hidden=true;}
+const SRC=new URLSearchParams(location.search).get('src')||(EMBED?'site':'stats');
+
+// The surname travels to the app inside the link (s_ + base64url); the app searches for it.
+const b64url=s=>{const b=new TextEncoder().encode(s);let bin='';b.forEach(x=>bin+=String.fromCharCode(x));return btoa(bin).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');};
+const appLink=name=>{const surname=name.split(' ')[0];const p='s_'+b64url(surname);return p.length<=64?`${APP}?startapp=${p}`:`${APP}?startapp=site`;};
+
+// Stages of one result: firing lines, or ranges and misses recovered from penalty loops where the protocol has no firing lines.
+const loops=s=>(s.stageResults||[]).filter(c=>c.isFine);
+function stagesOf(st,force){
+  const fire=st.some(s=>s.firingLine);
+  const out=st.map(s=>({range:!!s.firingLine,prone:s.firingLine?s.firingLine.type===2:null,misses:s.firingLine?s.firingLine.missesNumber:null,t:secs(s.individualResult),v:parseFloat(s.speed)||null,loopT:loops(s).length?secs(loops(s).at(-1).individualResult)||0:0}));
+  if(fire||st.length<3||st.length%2===0||!(force||st.some(x=>loops(x).length)))return out;
+  out.forEach((x,i)=>{if(i%2===1){x.range=true;x.prone=(i-1)/2%2===0;x.misses=Math.min(5,loops(st[i]).length+loops(st[i+1]).length);x.loopT=0;}});
+  return out;
+}
+
+const SEASONS={};let EVENTS=null;
+async function events(){if(!EVENTS){const r=await post('/events/list',{language:'ru',page:{skip:0,take:100}});EVENTS=(r.list||[]).filter(e=>e.id&&e.code);}return EVENTS;}
+const seasonOf=iso=>{const d=new Date(iso);return d.getMonth()>=6?d.getFullYear()+1:d.getFullYear();};
+
+// One season: every biathlon race (no relays, kids' races, single mixed, BiathLaw), every finisher.
+function loadSeason(year){
+  if(SEASONS[year])return SEASONS[year];
+  return SEASONS[year]=(async()=>{
+    const evs=(await events()).filter(e=>seasonOf(e.beginDate)===year&&e.beginDate<new Date().toISOString());
+    const races=[];
+    for(const e of evs){const g=await post('/events/get',{eventCode:e.code,language:'ru'});
+      for(const r of g.races||[])if(!r.isRelay&&!/ДЕТСК|СИНГЛ|ЭСТАФЕТ|BIATHLAW/i.test(r.name))races.push({e,r});}
+    let done=0;
+    const lists=await pool(races,6,async({e,r})=>{const rows=[];
+      for(let skip=0;skip<1000;skip+=100){const x=await post('/results/individual/get',{eventId:e.id,raceId:r.id,page:{skip,take:100},filter:{},isStagesOn:true,language:'ru'});const part=x.results||[];rows.push(...part);if(part.length<100)break;}
+      done++;el('status').textContent=`Загружаю протоколы: ${done} из ${races.length}…`;return {e,r,rows};});
+    const P={};
+    for(const L of lists){if(!L)continue;const {e,r,rows}=L;const cat=/МАСТЕР/i.test(r.name)?'Мастера':'Основная';
+      const force=rows.some(x=>(x.stageResults||[]).some(s=>loops(s).length));
+      for(const x of rows){if(x.status!==0)continue;const st=stagesOf(x.stageResults||[],force),rg=st.filter(s=>s.range);if(rg.length<2)continue;
+        const k=normName(x.fullName||'')+'|'+x.gender+'|'+cat;
+        const a=P[k]=P[k]||{name:title(x.fullName||''),sex:String(x.gender),cat,races:0,rt:[],dist:0,clean:0,ps:0,ph:0,ss:0,sh:0,group:'',date:''};
+        a.races++;if(e.beginDate>a.date){a.date=e.beginDate;a.group=x.genderAgeNominationName||'';}
+        for(const s of rg){if(s.t)a.rt.push(s.t);if(s.prone){a.ps+=5;a.ph+=5-s.misses;}else{a.ss+=5;a.sh+=5-s.misses;}}
+        // pure skiing: each lap's length as the timing system measures it (its speed × its time), over the lap time without penalty loops
+        for(const s of st){if(s.range||!s.t||!s.v)continue;const c=s.t-s.loopT;if(c<=0)continue;a.dist+=s.v*s.t/3600;a.clean+=c;}}}
+    return Object.values(P).map(a=>({...a,rtAvg:a.rt.length?a.rt.reduce((n,x)=>n+x,0)/a.rt.length:null,speed:a.clean?a.dist/(a.clean/3600):null,prone:a.ps?a.ph/a.ps:null,stand:a.ss?a.sh/a.ss:null}));
+  })().catch(e=>{delete SEASONS[year];throw e;});
+}
+
+// --- view ---
+const F={cat:'Основная',sex:'0',year:null,q:'',sort:'rt',dir:1};
+const fmtRt=s=>{if(s==null)return '—';const m=Math.floor(s/60),r=s-m*60;return m+':'+r.toFixed(1).padStart(4,'0').replace('.',',');};
+const fmtPct=x=>x==null?'—':(Math.round(1000*x)/10).toString().replace('.',',')+'%';
+const fmtSp=x=>x==null?'—':x.toFixed(2).replace('.',',');
+let DATA=[];
+function render(){
+  const q=normName(F.q);
+  let rows=DATA.filter(a=>a.cat===F.cat&&a.sex===F.sex&&(!q||normName(a.name).includes(q)));
+  const key={name:a=>a.name,rt:a=>a.rtAvg,speed:a=>a.speed,prone:a=>a.prone,stand:a=>a.stand}[F.sort];
+  // missing values always go last; speed and accuracy are best when high
+  const high=F.sort==='speed'||F.sort==='prone'||F.sort==='stand';
+  rows.sort((x,y)=>{const a=key(x),b=key(y);if(a==null)return 1;if(b==null)return -1;if(F.sort==='name')return F.dir*a.localeCompare(b,'ru');return (high?-1:1)*F.dir*(a-b);});
+  document.querySelectorAll('th[data-k]').forEach(th=>{if(th.dataset.k===F.sort)th.setAttribute('aria-sort',F.dir===1?'descending':'ascending');else th.removeAttribute('aria-sort');});
+  el('rows').innerHTML=rows.map(a=>`<tr>
+    <td class="n"><b>${esc(a.name)}</b><small>${esc(a.group)} · ${a.races} ${plural(a.races,'гонка','гонки','гонок')} · <a class="go" href="${appLink(a.name)}" target="_blank" rel="noopener">разбор ↗</a></small></td>
+    <td>${fmtRt(a.rtAvg)}</td><td>${fmtSp(a.speed)}</td>
+    <td title="${a.ph} из ${a.ps}">${fmtPct(a.prone)}<small>${a.ph}/${a.ps}</small></td>
+    <td title="${a.sh} из ${a.ss}">${fmtPct(a.stand)}<small>${a.sh}/${a.ss}</small></td>
+    <td class="hide-m"><a class="go" href="${appLink(a.name)}" target="_blank" rel="noopener">Разбор в Telegram ↗</a></td></tr>`).join('');
+  el('status').textContent=rows.length?`${rows.length} ${plural(rows.length,'участник','участника','участников')}`:'Никого не нашлось.';
+  el('table-card').hidden=!rows.length;
+}
+async function show(){
+  el('table-card').hidden=true;el('status').textContent='Загружаю этапы…';
+  try{DATA=await loadSeason(F.year);render();}
+  catch(e){el('status').textContent='Протоколы сейчас недоступны. Попробуйте позже.';}
+}
+function seg(id,key){el(id).onclick=e=>{const b=e.target.closest('button');if(!b)return;el(id).querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b?'true':'false'));F[key]=b.dataset.v;render();};}
+seg('f-cat','cat');seg('f-sex','sex');
+el('f-q').oninput=()=>{F.q=el('f-q').value;render();};
+document.querySelector('thead').onclick=e=>{const th=e.target.closest('th[data-k]');if(!th)return;F.dir=F.sort===th.dataset.k?-F.dir:1;F.sort=th.dataset.k;render();};
+el('f-year').onchange=()=>{F.year=+el('f-year').value;show();};
+el('cta').href=`${APP}?startapp=${encodeURIComponent(SRC.replace(/[^A-Za-z0-9_-]/g,'')||'site')}`;
+(async()=>{
+  try{const years=[...new Set((await events()).filter(e=>e.beginDate<new Date().toISOString()).map(e=>seasonOf(e.beginDate)))].sort((a,b)=>b-a);
+    el('f-year').innerHTML=years.map(y=>`<option value="${y}">${y-1}/${String(y).slice(2)}</option>`).join('');F.year=years[0];show();}
+  catch(e){el('status').textContent='Протоколы сейчас недоступны. Попробуйте позже.';}
+})();
+</script>
+</body>
+</html>

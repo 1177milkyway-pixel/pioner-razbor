@@ -1,4 +1,9 @@
 <!doctype html>
+<!--
+  © 2026 Сергей Ляшко, проект «Финишум». Все права защищены.
+  Код, методика расчётов и оформление — собственность автора.
+  Копирование, изменение и использование без письменного разрешения автора запрещены.
+-->
 <html lang="ru">
 <head>
 <meta charset="utf-8">
@@ -78,6 +83,15 @@ details.how{margin-top:6px}
 details.how summary{cursor:pointer;color:var(--muted);font-size:13px}
 .ai{background:var(--soft);border-radius:12px;padding:12px 14px;margin:14px 0 0}
 .ai p{margin:0}
+.photo{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.photo canvas{display:block;width:100%;max-width:420px;margin:12px auto;border-radius:12px;touch-action:none;cursor:grab;background:var(--soft)}
+.filebtn{position:relative;display:inline-block;font-weight:600;border-radius:12px;padding:12px 18px;background:var(--accent);color:var(--accent-text);cursor:pointer}
+.filebtn input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.photo .seg{display:inline-flex;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.photo .seg button{border-radius:0;background:var(--soft);color:var(--text);padding:10px 14px;font-weight:500}
+.photo .seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-text);font-weight:600}
+.zoom{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);max-width:420px;margin:0 auto 6px}
+.zoom input{flex:1}
 @media(max-width:520px){.score{grid-template-columns:repeat(2,1fr)}.score div:last-child:nth-child(odd){grid-column:span 2}.pick{grid-template-columns:1fr}.score b{font-size:22px}.person{font-size:22px}}
 </style>
 </head>
@@ -97,6 +111,7 @@ details.how summary{cursor:pointer;color:var(--muted);font-size:13px}
   </section>
 
   <section id="report" hidden></section>
+  <p class="note copy" style="text-align:center;margin-top:24px">© 2026 Финишум · разбор по открытым протоколам</p>
 </main>
 
 <script>
@@ -109,8 +124,13 @@ const AI_URL=new URLSearchParams(location.search).get('ai')||AI_URL_DEFAULT;
 // Yandex Metrika counter number; 0 — statistics are off. Only anonymous visits and goals are sent, never surnames.
 const METRIKA_ID=113655907;
 // Where the visit came from: the Telegram link's ?startapp=… (e.g. e1 for a post after stage 1), or ?src=… on the web page.
-const SRC=(()=>{let s='';try{s=(window.Telegram&&Telegram.WebApp&&Telegram.WebApp.initDataUnsafe&&Telegram.WebApp.initDataUnsafe.start_param)||new URLSearchParams(location.search).get('src')||'';}catch(e){}
-  return /^[A-Za-z0-9_-]{1,64}$/.test(s)?s:'none';})();
+// A link from the season table carries a surname instead (s_ + base64url): the app searches for it, and the visit counts as «site» — the surname never reaches Metrika.
+const START=(()=>{let s='';try{s=(window.Telegram&&Telegram.WebApp&&Telegram.WebApp.initDataUnsafe&&Telegram.WebApp.initDataUnsafe.start_param)||new URLSearchParams(location.search).get('src')||'';}catch(e){}
+  return /^[A-Za-z0-9_-]{1,64}$/.test(s)?s:'';})();
+const AUTOQ=(()=>{if(!START.startsWith('s_'))return '';try{const b=atob(START.slice(2).replace(/-/g,'+').replace(/_/g,'/'));return new TextDecoder().decode(Uint8Array.from(b,c=>c.charCodeAt(0))).trim().slice(0,40);}catch(e){return '';}})();
+const SRC=START.startsWith('s_')?'site':(START||'none');
+// «Фото с результатом» is shown only after the private demo link (startapp=pf7k2 or ?pf=7k2) has been opened on this device.
+const PHOTO_ON=(()=>{const on=START==='pf7k2'||new URLSearchParams(location.search).get('pf')==='7k2';try{if(on)localStorage.setItem('pf','1');return on||localStorage.getItem('pf')==='1';}catch(e){return on;}})();
 if(METRIKA_ID){
   (function(m,e,t,r,i,k,a){m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};m[i].l=1*new Date();k=e.createElement(t);a=e.getElementsByTagName(t)[0];k.async=1;k.src=r;a.parentNode.insertBefore(k,a);})(window,document,'script','https://mc.yandex.ru/metrika/tag.js','ym');
   ym(METRIKA_ID,'init',{clickmap:false,trackLinks:true,accurateTrackBounce:true,webvisor:false,params:{src:SRC}});
@@ -187,7 +207,7 @@ function parseRace(h,x,r){
   const laps=stages.filter(s=>!s.fire),ranges=stages.filter(s=>s.fire),order=stages;
   const total=r.participantCount||null;
   return {
-    id:h.participantId,raceId:h.raceId,eventId:h.event.id,date:h.event.beginDate,event:h.event.title.replace(/^PIONER CUP\s*/i,''),
+    id:h.participantId,raceId:h.raceId,eventId:h.event.id,date:h.event.beginDate,city:(h.event.cityName||h.event.place||'').split(',').pop().trim(),event:h.event.title.replace(/^PIONER CUP\s*/i,''),
     raceName:h.raceName,cat,type,name:h.fullName,
     result:secs(x.individualResult),resultText:x.individualResult||'',ok:x.status===0&&(!!x.individualResult||x.position>0),
     pos:x.position,of:total,catName:x.genderAgeNominationName,catPos:x.individualGenderAgePosition>0?x.individualGenderAgePosition:null,catOf:r.categoryParticipantCount||null,
@@ -593,9 +613,11 @@ function showView(v){
   const finds=v.findings.length?`<ul class="finds">${v.findings.map(c=>{const f=splitFinding(c.t);return `<li><b>${esc(f.head)}</b><span>${esc(f.body)}</span></li>`;}).join('')}</ul>`:`<p class="muted">${esc(v.empty||'Выводов по этой гонке нет.')}</p>`;
   const ai=AI_URL&&v.findings.length>=2?(v.aiText?`<div id="ai-text" class="ai"><p>${esc(v.aiText)}</p><p class="note">Текст составлен AI по выводам ниже; числа проверены программой.</p></div>`:'<div id="ai-text" class="ai"><p class="muted">Составляю разбор словами…</p></div>'):'';
   el('view').innerHTML=`<div class="card"><p class="eyebrow">${esc(v.eyebrow)} · ${esc(v.sub)}</p>${scoreHtml(v.tiles)}${shootHtml(v)}${ai}${finds}
-    <div class="actions"><button id="image" type="button">Поделиться картинкой</button><button id="copy" type="button" class="secondary">Скопировать текст</button></div>
+    <div class="actions"><button id="image" type="button">Поделиться картинкой</button><button id="copy" type="button" class="secondary">Скопировать текст</button>${PHOTO_ON&&v.segs&&v.race.ok?'<button id="photo-btn" type="button" class="secondary">Фото с результатом</button>':''}</div>
+    <div id="photo-box" hidden></div>
     <details class="how"><summary>Как считали</summary>${v.notes.map(n=>`<p class="note">${esc(n)}</p>`).join('')}</details></div>`+(v.segs?segsHtml(v):racesHtml(state.races));
   el('copy').onclick=()=>copyText(v);el('image').onclick=()=>exportImage(v);
+  if(el('photo-btn'))el('photo-btn').onclick=()=>openPhoto(v);
   if(AI_URL&&v.findings.length>=2&&!v.aiText)loadAiText(v);
 }
 
@@ -695,6 +717,125 @@ async function exportImage(v){
   finally{btn.disabled=false;}
 }
 
+// --- photo with the result ---
+// The athlete's own photo (e.g. one bought from the race) with the result laid over it. The photo never leaves the phone.
+const PH={img:null,fmt:'story',style:'a',zoom:1,ox:0,oy:0};
+function openPhoto(v){
+  const box=el('photo-box');box.hidden=false;track('photo_open');
+  box.innerHTML=`<div class="photo">
+    <p class="note" style="margin:0 0 10px">Выберите своё фото — например, купленное с гонки. Оно остаётся на телефоне.</p>
+    <div class="actions" style="margin:0"><label class="filebtn">Выбрать фото<input id="ph-file" type="file" accept="image/*"></label>
+      <span class="seg" id="ph-fmt"><button type="button" data-f="story" aria-pressed="true">Сторис</button><button type="button" data-f="post" aria-pressed="false">Пост</button></span>
+      <span class="seg" id="ph-style"><button type="button" data-s="a" aria-pressed="true">Вид 1</button><button type="button" data-s="b" aria-pressed="false">Вид 2</button><button type="button" data-s="c" aria-pressed="false">Вид 3</button></span></div>
+    <canvas id="ph-canvas"></canvas>
+    <label class="zoom">Масштаб<input id="ph-zoom" type="range" min="1" max="3" step="0.01" value="1"></label>
+    <p class="note" style="margin:0">Двигайте фото пальцем, чтобы выбрать кадр.</p>
+    <div class="actions"><button id="ph-save" type="button">Сохранить фото</button></div></div>`;
+  PH.zoom=1;PH.ox=0;PH.oy=0;
+  const cv=el('ph-canvas'),draw=()=>drawPhoto(cv,v);
+  el('ph-file').onchange=()=>{const f=el('ph-file').files[0];if(!f)return;const img=new Image();img.onload=()=>{PH.img=img;PH.zoom=1;PH.ox=0;PH.oy=0;el('ph-zoom').value='1';draw();};img.src=URL.createObjectURL(f);};
+  el('ph-fmt').onclick=e=>{const b=e.target.closest('button');if(!b)return;PH.fmt=b.dataset.f;el('ph-fmt').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b?'true':'false'));draw();};
+  el('ph-style').onclick=e=>{const b=e.target.closest('button');if(!b)return;PH.style=b.dataset.s;el('ph-style').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b?'true':'false'));draw();};
+  el('ph-zoom').oninput=()=>{PH.zoom=+el('ph-zoom').value;draw();};
+  let drag=null;
+  cv.onpointerdown=e=>{drag={x:e.clientX,y:e.clientY};cv.setPointerCapture(e.pointerId);};
+  cv.onpointermove=e=>{if(!drag)return;const k=cv.width/cv.clientWidth;PH.ox+=(e.clientX-drag.x)*k;PH.oy+=(e.clientY-drag.y)*k;drag={x:e.clientX,y:e.clientY};draw();};
+  cv.onpointerup=cv.onpointercancel=()=>{drag=null;};
+  el('ph-save').onclick=()=>savePhoto(cv,v);
+  draw();box.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function drawPhoto(c,v){
+  const story=PH.fmt==='story',W=1080,H=story?1920:1350,P=72,PT=story?190:P,PB=story?250:P,font='-apple-system,system-ui,"Segoe UI",Roboto,sans-serif';
+  const C={ink:'#ffffff',muted:'#c9cbf0',hit:'#e1ff00',miss:'#ff6a3d',deep:'13,13,54',blue:'#0042fe',dark:'#15154f'};
+  c.width=W;c.height=H;const x=c.getContext('2d'),r=v.race;x.textBaseline='alphabetic';
+  if(PH.img){const s=Math.max(W/PH.img.width,H/PH.img.height)*PH.zoom,dw=PH.img.width*s,dh=PH.img.height*s;
+    PH.ox=Math.max(-(dw-W)/2,Math.min((dw-W)/2,PH.ox));PH.oy=Math.max(-(dh-H)/2,Math.min((dh-H)/2,PH.oy));
+    x.drawImage(PH.img,(W-dw)/2+PH.ox,(H-dh)/2+PH.oy,dw,dh);}
+  else{const g=x.createLinearGradient(0,0,0,H);g.addColorStop(0,'#2a2aa8');g.addColorStop(1,'#0d0d36');x.fillStyle=g;x.fillRect(0,0,W,H);
+    x.fillStyle='rgba(255,255,255,.55)';x.font=`600 40px ${font}`;x.textAlign='center';x.fillText('Здесь будет ваше фото',W/2,H*0.45);x.textAlign='left';}
+  // what the picture says: the cup, the race format, where and when; the bot is only a small signature
+  const fmtName=r.type.toUpperCase(),stage=(r.event.match(/^\d+\s*этап/i)||[''])[0];
+  const where=[r.city,dateRu(r.date)].filter(Boolean).join(' · ');
+  const time=(r.resultText||'').replace(/\.\d+$/,'').replace(/^00:/,'');
+  const cols=[[String(r.pos),`место из ${r.of??'—'}`],...(r.catPos?[[String(r.catPos),`в категории ${(r.catName||'').replace(/ /g,' ')}`]]:[]),[time,'время']];
+  const shade=(y0,y1,a0,a1)=>{const g=x.createLinearGradient(0,y0,0,y1);g.addColorStop(0,`rgba(${C.deep},${a0})`);g.addColorStop(1,`rgba(${C.deep},${a1})`);x.fillStyle=g;x.fillRect(0,Math.min(y0,y1),W,Math.abs(y1-y0));};
+  const spaced=(t,px)=>{try{x.letterSpacing=px+'px';}catch(e){}return t;};
+  const plain=()=>{try{x.letterSpacing='0px';}catch(e){}};
+  const round=(X,Y,w,h,rad)=>{x.beginPath();if(x.roundRect)x.roundRect(X,Y,w,h,rad);else x.rect(X,Y,w,h);};
+  // shared bottom block: name, numbers, targets
+  const results=(yBottom,nameSize)=>{let y=yBottom;
+    if(r.ranges.length){let tx=P;
+      for(const f of r.ranges){x.font=`600 30px ${font}`;x.fillStyle=C.muted;const lab=f.fire.prone?'Лёжа':'Стоя';x.fillText(lab,tx,y+10);tx+=x.measureText(lab).width+18;
+        for(let k=0;k<5;k++){const miss=k>=5-f.fire.misses;x.beginPath();x.arc(tx+16+k*40,y,15,0,Math.PI*2);if(miss){x.lineWidth=4;x.strokeStyle=C.miss;x.stroke();}else{x.fillStyle=C.hit;x.fill();}}
+        tx+=5*40+40;if(tx>W-P-260){y-=60;tx=P;}}
+      y-=92;}
+    const cw=(W-2*P)/cols.length;
+    cols.forEach(([val,lab],i)=>{const cx=P+i*cw;x.fillStyle=lab.startsWith('место')?C.hit:C.ink;x.font=`800 ${val.length>5?80:100}px ${font}`;x.fillText(val,cx,y);x.fillStyle=C.muted;x.font=`400 28px ${font}`;wrapLines(x,lab,cw-16).slice(0,2).forEach((t,k)=>x.fillText(t,cx,y+42+k*32));});
+    y-=136;
+    x.fillStyle=C.ink;x.font=`800 ${nameSize}px ${font}`;const ls=wrapLines(x,v.title,W-2*P).slice(0,2).reverse();
+    ls.forEach((l,i)=>x.fillText(l,P,y-i*(nameSize+12)));};
+  const signature=y=>{x.textAlign='right';x.font=`500 24px ${font}`;x.fillStyle='rgba(255,255,255,.6)';x.fillText('@finishum_bot',W-P,y);x.textAlign='left';};
+
+  // masks: only text over the photo, like Strava and Garmin stickers; a soft shadow keeps it readable
+  const lift=()=>{x.shadowColor='rgba(0,0,0,.5)';x.shadowBlur=16;x.shadowOffsetY=2;};
+  const flat=()=>{x.shadowColor='transparent';x.shadowBlur=0;x.shadowOffsetY=0;};
+  const label=(t,X,Y,align)=>{x.textAlign=align||'left';x.font=`700 26px ${font}`;x.fillStyle='rgba(255,255,255,.85)';x.fillText(spaced(t.toUpperCase(),3),X,Y);plain();x.textAlign='left';};
+  const value=(t,X,Y,size,align,color)=>{x.textAlign=align||'left';x.font=`800 ${size}px ${font}`;x.fillStyle=color||C.ink;x.fillText(t,X,Y);x.textAlign='left';};
+  const dots=(X,Y,rad,gap,center)=>{if(!r.ranges.length)return;const per=5*gap+gap*0.6,total=r.ranges.length*per-gap*0.6;let tx=center?X-total/2+rad:X+rad;
+    for(const f of r.ranges){for(let k=0;k<5;k++){const miss=k>=5-f.fire.misses;x.beginPath();x.arc(tx+k*gap,Y,rad,0,Math.PI*2);if(miss){x.lineWidth=Math.max(3,rad/4);x.strokeStyle=C.miss;x.stroke();}else{x.fillStyle=C.hit;x.fill();}}tx+=per;}};
+  const hits=r.ranges.reduce((n,f)=>n+5-f.fire.misses,0),shots=r.ranges.length*5;
+  const catTxt=r.catPos?`${r.catPos} / ${r.catOf??'—'}`:'';
+
+  if(PH.style==='b'){
+    // Strava-like: the race as a title at the top, a column of figures at the bottom left
+    shade(0,H*0.22,0.35,0);shade(H*0.5,H,0,0.55);lift();
+    let y=PT+46;
+    x.font=`800 40px ${font}`;x.fillStyle=C.ink;x.fillText(spaced('PIONER CUP',4),P,y);plain();
+    y+=62;value(fmtName,P,y,54,'left',C.hit);
+    y+=46;x.font=`500 32px ${font}`;x.fillStyle=C.ink;x.fillText([where,stage].filter(Boolean).join(' · '),P,y);
+    const rows=[['Время',time],['Место',`${r.pos} / ${r.of??'—'}`],...(catTxt?[[`В категории ${(r.catName||'').replace(/ /g,' ')}`,catTxt]]:[])];
+    let yb=H-PB;
+    if(shots){dots(P,yb-22,16,42,false);label(`Стрельба · ${hits} из ${shots}`,P,yb-62);yb-=140;}
+    for(const [l,val] of rows.reverse()){value(val,P,yb,84);label(l,P,yb-96);yb-=158;}
+    x.font=`800 54px ${font}`;x.fillStyle=C.ink;wrapLines(x,v.title,W-2*P).slice(0,2).reverse().forEach((l,i)=>x.fillText(l,P,yb+10-i*64));
+    flat();signature(H-PB+44);
+    return;}
+  if(PH.style==='c'){
+    // Garmin-like: three figures side by side in the middle of the bottom, the race above them
+    shade(H*0.5,H,0,0.55);lift();
+    const cx=W/2;let y=H-PB-330;
+    x.textAlign='center';x.font=`800 34px ${font}`;x.fillStyle=C.ink;x.fillText(spaced('PIONER CUP',5),cx,y-260);plain();
+    value(fmtName,cx,y-200,48,'center',C.hit);
+    x.textAlign='center';x.font=`500 30px ${font}`;x.fillStyle=C.ink;x.fillText([where,stage].filter(Boolean).join(' · '),cx,y-154);x.textAlign='left';
+    const cells=[['Место',`${r.pos}`,`из ${r.of??'—'}`],...(r.catPos?[[(r.catName||'Категория').replace(/ /g,' '),`${r.catPos}`,`из ${r.catOf??'—'}`]]:[]),['Время',time,'']];
+    const cw=(W-2*P)/cells.length;
+    cells.forEach(([l,val,sub],i)=>{const X=P+cw*i+cw/2;label(l,X,y,'center');value(val,X,y+96,val.length>5?78:96,'center');if(sub){x.textAlign='center';x.font=`500 28px ${font}`;x.fillStyle='rgba(255,255,255,.85)';x.fillText(sub,X,y+138);x.textAlign='left';}});
+    if(shots){dots(cx,y+218,15,40,true);label(`Стрельба · ${hits} из ${shots}`,cx,y+278,'center');}
+    x.textAlign='center';x.font=`700 40px ${font}`;x.fillStyle=C.ink;x.fillText(v.title,cx,y-70);x.textAlign='left';
+    flat();
+    x.textAlign='center';x.font=`500 24px ${font}`;x.fillStyle='rgba(255,255,255,.6)';x.fillText('@finishum_bot',cx,H-PB+44);x.textAlign='left';
+    return;}
+  // style a: the event as a header at the top, the result at the bottom
+  shade(0,H*0.3,0.55,0);shade(H*0.45,H,0,0.7);x.shadowColor='rgba(0,0,0,.45)';x.shadowBlur=14;x.shadowOffsetY=2;
+  let y=PT+64;
+  x.font=`800 64px ${font}`;x.fillStyle=C.ink;x.fillText(spaced('PIONER CUP',4),P,y);plain();
+  y+=18;x.fillStyle=C.hit;x.fillRect(P,y,120,8);
+  y+=76;x.font=`800 58px ${font}`;x.fillStyle=C.hit;x.fillText(fmtName,P,y);
+  y+=52;x.font=`500 34px ${font}`;x.fillStyle=C.ink;x.fillText([where,stage].filter(Boolean).join(' · '),P,y);
+  results(H-PB,88);x.shadowColor='transparent';x.shadowBlur=0;x.shadowOffsetY=0;signature(H-PB+44);
+}
+async function savePhoto(c,v){
+  track('photo',{fmt:PH.fmt,own:!!PH.img});
+  const btn=el('ph-save');btn.disabled=true;
+  try{
+    const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',0.92));
+    const file=new File([blob],`foto_${translit(v.title.split(' ')[0])}_${v.file}.jpg`,{type:'image/jpeg'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:'Моя гонка'});}
+    else{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=file.name;document.body.append(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);}
+  }catch(e){if(e&&e.name!=='AbortError')el('status').textContent='Не удалось сохранить фото: откройте приложение в браузере.';}
+  finally{btn.disabled=false;}
+}
+
 // --- flow ---
 el('search-form').onsubmit=async e=>{
   e.preventDefault();const q=el('q').value.trim();if(q.length<2)return;track('search');
@@ -742,6 +883,8 @@ async function build(hits,groups){
   }catch(err){el('status').textContent='Не удалось загрузить гонки. Попробуйте ещё раз.';el('status').classList.add('err');}
   finally{el('build').disabled=false;}
 }
+// Opened from the season table: search for that surname at once.
+if(AUTOQ){el('q').value=AUTOQ;el('search-form').requestSubmit();}
 </script>
 </body>
 </html>
