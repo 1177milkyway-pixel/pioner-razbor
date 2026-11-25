@@ -10,6 +10,18 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Pioner Cup — Разбор гонки</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script>
+(() => {
+  const launch = new URLSearchParams(location.search);
+  const start = window.Telegram?.WebApp?.initDataUnsafe?.start_param
+    || launch.get('tgWebAppStartParam');
+  if (start !== 'demo-race') return;
+  const target = new URL('demo-race.html', location.href);
+  target.search = location.search;
+  target.hash = location.hash;
+  location.replace(target.href);
+})();
+</script>
 <style>
 :root{--bg:#f2f3fa;--card:#fff;--ink:#15154f;--text:#23234a;--muted:#5d6088;--line:#dfe1f0;--accent:#0042fe;--accent-text:#fff;--hit:#0042fe;--miss:#e8541f;--good:#0042fe;--mid:#7b7fa3;--weak:#e8541f;--soft:#f5f6fc;--warn:#c2410c}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0d0d36;--card:#16165a;--ink:#ffffff;--text:#dcdcf5;--muted:#9d9fd6;--line:#29297a;--accent:#e1ff00;--accent-text:#15154f;--hit:#e1ff00;--miss:#ff6a3d;--good:#4f6bff;--mid:#6e7199;--weak:#ff6a3d;--soft:#1c1c66;--warn:#ff9a74}}
